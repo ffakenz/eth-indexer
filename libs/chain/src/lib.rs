@@ -1,1 +1,1 @@
-pub mod rpc_provider;
+pub mod rpc;
