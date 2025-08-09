@@ -1355,6 +1355,14 @@ dependencies = [
 [[package]]
 name = "engine"
 version = "0.1.0"
+dependencies = [
+ "alloy",
+ "chain",
+ "eyre",
+ "futures-util",
+ "sync",
+ "tokio",
+]
 
 [[package]]
 name = "equivalent"
