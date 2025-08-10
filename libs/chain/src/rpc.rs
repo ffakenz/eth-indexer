@@ -1,8 +1,10 @@
 use std::time::Duration;
 
+use alloy::eips::BlockId;
 use alloy::eips::BlockNumberOrTag;
 use alloy::network::EthereumWallet;
 use alloy::primitives::Address;
+use alloy::primitives::BlockHash;
 use alloy::providers::Identity;
 use alloy::providers::RootProvider;
 use alloy::providers::fillers::{
@@ -11,13 +13,17 @@ use alloy::providers::fillers::{
 use alloy::providers::{Provider, ProviderBuilder};
 use alloy::rpc::client::PollerStream;
 use alloy::rpc::client::RpcClient;
+use alloy::rpc::types::Block;
 use alloy::rpc::types::Filter;
 use alloy::rpc::types::Log;
+use alloy::rpc::types::TransactionReceipt;
 use alloy::signers::local::PrivateKeySigner;
 use alloy::transports::RpcError;
 use alloy::transports::TransportErrorKind;
 use alloy::transports::http::reqwest;
 use eyre::Result;
+use futures_util::StreamExt;
+use futures_util::stream::BoxStream;
 use reqwest::Url;
 
 type NodeClientProvider = FillProvider<
@@ -51,6 +57,16 @@ impl NodeClient {
         self.provider.get_block_number().await
     }
 
+    pub async fn get_latest_block(&self) -> Result<Option<Block>, RpcError<TransportErrorKind>> {
+        self.provider.get_block(BlockId::latest()).full().await
+    }
+
+    pub async fn get_latest_finalized_block(
+        &self,
+    ) -> Result<Option<Block>, RpcError<TransportErrorKind>> {
+        self.provider.get_block(BlockId::finalized()).full().await
+    }
+
     pub async fn get_accounts(&self) -> Result<Vec<Address>, RpcError<TransportErrorKind>> {
         self.provider.get_accounts().await
     }
@@ -59,14 +75,127 @@ impl NodeClient {
         &self,
         address: &Address,
         event: &str,
-        from_block: BlockNumberOrTag,
+        from_block_number: BlockNumberOrTag,
         poll_interval: Duration,
     ) -> Result<PollerStream<Vec<Log>>, RpcError<TransportErrorKind>> {
-        let filter = Filter::new().address(*address).event(event).from_block(from_block);
+        let filter = Filter::new().address(*address).event(event).from_block(from_block_number);
 
         self.provider
             .watch_logs(&filter)
             .await
             .map(|poller_builder| poller_builder.with_poll_interval(poll_interval).into_stream())
+    }
+
+    pub async fn watch_block_hashes(
+        &self,
+        poll_interval: Duration,
+    ) -> Result<PollerStream<Vec<BlockHash>>, RpcError<TransportErrorKind>> {
+        self.provider
+            .watch_blocks()
+            .await
+            .map(|block_provider| block_provider.with_poll_interval(poll_interval).into_stream())
+    }
+
+    pub async fn watch_full_blocks(
+        &self,
+        poll_interval: Duration,
+    ) -> Result<BoxStream<Result<Block, RpcError<TransportErrorKind>>>> {
+        let mut watcher = self.provider.watch_full_blocks().await?;
+        watcher.set_poll_interval(poll_interval);
+        Ok(watcher.into_stream().boxed())
+    }
+
+    pub async fn get_transaction_receipts_by_block_hash(
+        &self,
+        block_hash: BlockHash,
+    ) -> Result<Option<Vec<TransactionReceipt>>, RpcError<TransportErrorKind>> {
+        self.provider.get_block_receipts(block_hash.into()).await
+    }
+
+    pub async fn get_block_by_hash(
+        &self,
+        block_hash: BlockHash,
+    ) -> Result<Option<Block>, RpcError<TransportErrorKind>> {
+        self.provider.get_block_by_hash(block_hash).await
+    }
+
+    pub async fn get_block_by_number(
+        &self,
+        block_number: u64,
+    ) -> Result<Option<Block>, RpcError<TransportErrorKind>> {
+        self.provider.get_block_by_number(block_number.into()).await
+    }
+
+    pub async fn get_block_by_id(
+        &self,
+        block_id: BlockId,
+    ) -> Result<Option<Block>, RpcError<TransportErrorKind>> {
+        self.provider.get_block(block_id).await
+    }
+
+    // helper to catch up on missing blocks by
+    // walking backward from latest finalized block (current) to latest finalized known.
+    // note: this is not handling reorgs and assumes we traverse the canonical chain.
+    pub async fn moonwalk_blocks(
+        &self,
+        // checkpoint: latest known finalized block hash
+        known_block_hash: BlockHash,
+    ) -> Result<Vec<Block>, RpcError<TransportErrorKind>> {
+        let known_block = self
+            .get_block_by_hash(known_block_hash)
+            .await?
+            .ok_or_else(|| RpcError::local_usage_str("Known Block Not Found"))?;
+
+        let mut current_block = self
+            // TODO! get_latest_finalized_block
+            .get_latest_block()
+            .await?
+            .ok_or_else(|| RpcError::local_usage_str("Current Block Not Found"))?;
+
+        let mut blocks: Vec<Block> = Vec::new();
+
+        loop {
+            // If we're at genesis block (number zero), break (no ancestor)
+            if current_block.number() == 0 {
+                break;
+            }
+
+            if known_block.hash() == current_block.hash() {
+                break;
+            }
+
+            blocks.push(current_block.clone());
+
+            current_block = self
+                .get_block_by_hash(current_block.header.parent_hash)
+                .await?
+                .ok_or_else(|| RpcError::local_usage_str("Parent Block Not Found"))?;
+        }
+
+        Ok(blocks)
+    }
+
+    pub async fn filtered_tx_logs_from_block(
+        &self,
+        block: &Block,
+        address: &Address,
+        event: &str,
+    ) -> Result<Vec<Log>> {
+        let filter = Filter::new().address(*address).event(event);
+
+        let txs =
+            self.get_transaction_receipts_by_block_hash(block.hash()).await?.unwrap_or(vec![]);
+
+        let filtered_logs: Vec<Log> = txs
+            .into_iter()
+            .flat_map(|tx| {
+                tx.logs()
+                    .to_vec()
+                    .into_iter()
+                    .filter(|tx_log| filter.matches(&tx_log.clone().into_inner()))
+            })
+            .collect();
+
+        Ok(filtered_logs)
     }
 }
