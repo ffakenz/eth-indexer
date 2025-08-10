@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use alloy::eips::BlockNumberOrTag;
 use alloy::network::EthereumWallet;
 use alloy::primitives::Address;
 use alloy::providers::Identity;
@@ -58,7 +59,7 @@ impl NodeClient {
         &self,
         address: &Address,
         event: &str,
-        from_block: u64,
+        from_block: BlockNumberOrTag,
         poll_interval: Duration,
     ) -> Result<PollerStream<Vec<Log>>, RpcError<TransportErrorKind>> {
         let filter = Filter::new().address(*address).event(event).from_block(from_block);
