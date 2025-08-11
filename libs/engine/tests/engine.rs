@@ -89,7 +89,7 @@ mod tests {
         // Let the engine run for a few iterations
         tokio::time::sleep(Duration::from_secs(1)).await;
         let mut collected_logs = engine.get_collected_logs().await;
-        while let Some(log) = collected_logs.pop() {
+        while let Some(log) = collected_logs.pop_front() {
             println!("Collected Transfer: {log:?}");
             let log_tx_hash = &log.transaction_hash.unwrap();
             assert!(expected_tx_hashes.contains(log_tx_hash));
@@ -176,8 +176,7 @@ mod tests {
         // Let the engine run for a few iterations
         tokio::time::sleep(Duration::from_secs(1)).await;
         let mut collected_logs = engine.get_collected_logs().await;
-        collected_logs.reverse();
-        while let Some(log) = collected_logs.pop() {
+        while let Some(log) = collected_logs.pop_back() {
             println!("Collected Transfer: {log:?}");
             let log_tx_hash = &log.transaction_hash.unwrap();
             assert!(expected_tx_hashes.contains(log_tx_hash));

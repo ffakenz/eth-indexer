@@ -4,6 +4,7 @@ use alloy::rpc::types::Log;
 use chain::rpc::NodeClient;
 use eyre::{Report, Result};
 use futures_util::{StreamExt, stream};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use sync::{consumer::Consumer, producer::Producer};
 use tokio::sync::{Mutex, broadcast, mpsc};
@@ -13,7 +14,7 @@ pub struct Engine {
     shutdown_tx: broadcast::Sender<()>,
     consumer_handle: JoinHandle<()>,
     producer_handle: JoinHandle<()>,
-    collected_logs: Arc<Mutex<Vec<Log>>>,
+    collected_logs: Arc<Mutex<VecDeque<Log>>>,
 }
 
 impl Engine {
@@ -28,7 +29,7 @@ impl Engine {
         // * Arc, allows sharing across async tasks/closures.
         // * Mutex, gives async mutable access:
         //   because the vec needs to be mutated exclusively and the callback can be called concurrently.
-        let collected_logs = Arc::new(Mutex::new(Vec::new()));
+        let collected_logs = Arc::new(Mutex::new(VecDeque::new()));
 
         // Consumer callback: receives Result<Log> and prints
         // A closure that returns a future.
@@ -39,7 +40,7 @@ impl Engine {
                 let mut locked_collected_logs = logs_for_consumer.lock().await;
                 if let Ok(log) = consumed_log {
                     println!("Consumed log: {log:?}");
-                    locked_collected_logs.push(log);
+                    locked_collected_logs.push_back(log);
                 }
             }
         };
@@ -92,7 +93,7 @@ impl Engine {
         // * Arc, allows sharing across async tasks/closures.
         // * Mutex, gives async mutable access:
         //   because the vec needs to be mutated exclusively and the callback can be called concurrently.
-        let collected_logs = Arc::new(Mutex::new(Vec::new()));
+        let collected_logs = Arc::new(Mutex::new(VecDeque::new()));
 
         // Consumer callback: receives Result<Log> and prints
         // A closure that returns a future.
@@ -103,7 +104,7 @@ impl Engine {
                 let mut locked_collected_logs = logs_for_consumer.lock().await;
                 if let Ok(log) = consumed_log {
                     println!("Consumed log: {log:?}");
-                    locked_collected_logs.push(log);
+                    locked_collected_logs.push_front(log);
                 }
             }
         };
@@ -177,7 +178,7 @@ impl Engine {
     }
 
     // Get a snapshot of the collected logs so far
-    pub async fn get_collected_logs(&self) -> Vec<Log> {
+    pub async fn get_collected_logs(&self) -> VecDeque<Log> {
         let locked = self.collected_logs.lock().await;
         locked.clone()
     }
