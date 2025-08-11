@@ -1,15 +1,11 @@
-use crate::args::{MoonwalkArgs, WatchLogsArgs};
-use alloy::primitives::BlockHash;
+use crate::args::Args;
 use alloy::rpc::types::Log;
 use chain::rpc::NodeClient;
-use eyre::{Report, Result};
-use futures_util::{StreamExt, stream};
+use eyre::Result;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use sync::{consumer::Consumer, producer::Producer};
 use tokio::sync::{Mutex, broadcast, mpsc};
 use tokio::task::JoinHandle;
-
 pub struct Engine {
     shutdown_tx: broadcast::Sender<()>,
     consumer_handle: JoinHandle<()>,
@@ -18,153 +14,54 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub async fn start_watch_logs(args: WatchLogsArgs, node_client: &NodeClient) -> Result<Engine> {
+    pub async fn start(args: Args, node_client: &NodeClient) -> Result<Engine> {
+        // 1. Run moonwalk synchronously, collect logs gap-fill
+        let (collected_logs, checkpoint_number, checkpoint_hash) =
+            crate::utils::gap_fill(&args, node_client).await?;
+
+        // 2. Run watch asynchronously, collect logs live
+
         // Channel for passing logs from producer to consumer
         let (tx, rx) = mpsc::channel::<Result<Log>>(100);
 
         // Broadcast channel for shutdown signal
         let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
-        // Wrap the vec in a Arc + Mutex for interior mutability.
+        // FIXME! replace by persistent store (SQLite)
+        // Wrapped in a Arc + Mutex for interior mutability.
         // * Arc, allows sharing across async tasks/closures.
-        // * Mutex, gives async mutable access:
-        //   because the vec needs to be mutated exclusively and the callback can be called concurrently.
-        let collected_logs = Arc::new(Mutex::new(VecDeque::new()));
+        // * Mutex, gives async mutable access
+        let shared_collected_logs = Arc::new(Mutex::new(collected_logs));
+        let shared_checkpoint_hash = Arc::new(Mutex::new(checkpoint_hash));
 
-        // Consumer callback: receives Result<Log> and prints
-        // A closure that returns a future.
-        let shared_collected_logs = Arc::clone(&collected_logs);
-        let consumer_callback = move |consumed_log: Result<Log>| {
-            let logs_for_consumer = Arc::clone(&shared_collected_logs);
-            async move {
-                let mut locked_collected_logs = logs_for_consumer.lock().await;
-                if let Ok(log) = consumed_log {
-                    println!("Consumed log: {log:?}");
-                    locked_collected_logs.push_back(log);
-                }
-            }
+        // -- Spawn Consumer --
+        let consumer_handle = crate::utils::spawn_consumer(
+            rx,
+            shutdown_tx.clone(),
+            Arc::clone(&shared_collected_logs),
+            Arc::clone(&shared_checkpoint_hash),
+        )
+        .await;
+
+        // -- Spawn Producer --
+        let next_checkpoint_number = {
+            let locked_collected_logs = shared_collected_logs.lock().await;
+            let next_checkpoint_number = checkpoint_number + locked_collected_logs.len() as u64;
+            drop(locked_collected_logs);
+            next_checkpoint_number
         };
+        let shared_logs_stream =
+            crate::utils::get_logs_stream(&args, node_client, next_checkpoint_number).await?;
+        let producer_handle =
+            crate::utils::spawn_producer(tx, shutdown_tx.clone(), Arc::clone(&shared_logs_stream))
+                .await;
 
-        // Spawn consumer: consumes logs from rx
-        let consumer_handle = Consumer::spawn(rx, shutdown_tx.clone(), consumer_callback);
-
-        let logs_stream = node_client
-            .watch_logs(&args.address, &args.event, args.from_block, args.poll_interval)
-            .await?
-            .flat_map(stream::iter);
-
-        // Box::pin(stream), pins the stream on the heap to guarantee it doesn't move, so it can be safely polled.
-        // Wrap the stream in a Arc + Mutex for interior mutability.
-        // * Arc, allows sharing across async tasks/closures.
-        // * Mutex, gives async mutable access:
-        //   because the stream needs to be polled exclusively and the callback can be called concurrently.
-        let shared_logs_stream = Arc::new(Mutex::new(Box::pin(logs_stream)));
-
-        // Producer callback: receives Option<Log> and passes it to consumer
-        // A closure thaOkreturns a future
-        let producer_callback = move || {
-            let logs_stream_for_producer = Arc::clone(&shared_logs_stream);
-            async move {
-                let mut locked_stream = logs_stream_for_producer.lock().await;
-                match locked_stream.next().await {
-                    Some(log) => Ok(log),
-                    None => Err(Report::msg("Stream ended")),
-                }
-            }
-        };
-
-        // Spawn producer: produces logs and sends to tx
-        let producer_handle = Producer::spawn(tx, shutdown_tx.clone(), producer_callback);
-
-        Ok(Self { shutdown_tx, consumer_handle, producer_handle, collected_logs })
-    }
-
-    pub async fn start_moonwalk_logs(
-        args: MoonwalkArgs,
-        node_client: &NodeClient,
-    ) -> Result<Engine> {
-        // Channel for passing logs from producer to consumer
-        let (tx, rx) = mpsc::channel::<Result<Log>>(100);
-
-        // Broadcast channel for shutdown signal
-        let (shutdown_tx, _) = broadcast::channel::<()>(1);
-
-        // Wrap the vec in a Arc + Mutex for interior mutability.
-        // * Arc, allows sharing across async tasks/closures.
-        // * Mutex, gives async mutable access:
-        //   because the vec needs to be mutated exclusively and the callback can be called concurrently.
-        let collected_logs = Arc::new(Mutex::new(VecDeque::new()));
-
-        // Consumer callback: receives Result<Log> and prints
-        // A closure that returns a future.
-        let shared_collected_logs = Arc::clone(&collected_logs);
-        let consumer_callback = move |consumed_log: Result<Log>| {
-            let logs_for_consumer = Arc::clone(&shared_collected_logs);
-            async move {
-                let mut locked_collected_logs = logs_for_consumer.lock().await;
-                if let Ok(log) = consumed_log {
-                    println!("Consumed log: {log:?}");
-                    locked_collected_logs.push_front(log);
-                }
-            }
-        };
-
-        // Spawn consumer: consumes logs from rx
-        let consumer_handle = Consumer::spawn(rx, shutdown_tx.clone(), consumer_callback);
-
-        // Wrap the checkpoint in a Arc + Mutex for interior mutability.
-        // * Arc, allows sharing across async tasks/closures.
-        // * Mutex, gives async mutable access:
-        //   because the checkpoint needs to be mutated exclusively and the callback can be called concurrently.
-        let checkpoint = Arc::new(Mutex::new(args.from_block));
-
-        let shared_node_client = node_client.clone();
-
-        // Producer callback: receives Option<Log> and passes it to consumer
-        // A closure thaOkreturns a future
-        let producer_callback = move || {
-            let checkpoint_for_producer = Arc::clone(&checkpoint);
-            let node_client_for_producer = shared_node_client.clone();
-            let args_for_producer = args.clone();
-            async move {
-                // Lock checkpoint mutex and read current checkpoint inside the closure
-                let current_checkpoint_hash = {
-                    let locked = checkpoint_for_producer.lock().await;
-                    *locked
-                };
-
-                let blocks =
-                    node_client_for_producer.moonwalk_blocks(current_checkpoint_hash).await?;
-
-                let mut logs: Vec<(Log, BlockHash)> = vec![];
-                for block in blocks {
-                    let block_logs = node_client_for_producer
-                        .filtered_tx_logs_from_block(
-                            &block,
-                            &args.address,
-                            &args_for_producer.event,
-                        )
-                        .await?;
-                    for log in block_logs {
-                        logs.push((log, block.hash()));
-                    }
-                }
-
-                if let Some((log, block_hash)) = logs.pop() {
-                    // Update checkpoint to latest block hash after processing last log
-                    let mut locked = checkpoint_for_producer.lock().await;
-                    *locked = block_hash;
-                    Ok(log)
-                } else {
-                    Err(Report::msg("Moonwalk found no blocks"))
-                }
-            }
-        };
-
-        // Spawn producer: produces logs and sends to tx
-        let producer_handle = Producer::spawn(tx, shutdown_tx.clone(), producer_callback);
-
-        Ok(Self { shutdown_tx, consumer_handle, producer_handle, collected_logs })
+        Ok(Self {
+            shutdown_tx,
+            consumer_handle,
+            producer_handle,
+            collected_logs: Arc::clone(&shared_collected_logs),
+        })
     }
 
     // Send shutdown signal and wait for both producer and consumer to finish
@@ -180,6 +77,8 @@ impl Engine {
     // Get a snapshot of the collected logs so far
     pub async fn get_collected_logs(&self) -> VecDeque<Log> {
         let locked = self.collected_logs.lock().await;
-        locked.clone()
+        let collected_logs_cloned = locked.clone();
+        drop(locked);
+        collected_logs_cloned
     }
 }
