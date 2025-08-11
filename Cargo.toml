@@ -2,4 +2,6 @@
 resolver = "2"
 members = [
     "libs/chain"
-, "libs/engine", "libs/sync"]
+    , "libs/engine"
+    , "libs/sync"
+]

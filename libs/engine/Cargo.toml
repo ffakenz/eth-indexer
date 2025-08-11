@@ -3,6 +3,11 @@ name = "engine"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "engine"
+path = "src/lib.rs"
+test = false
+
 [dependencies]
 chain = { path = "../chain" }
 sync = { path = "../sync" }

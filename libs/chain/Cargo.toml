@@ -3,6 +3,11 @@ name = "chain"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "chain"
+path = "src/lib.rs"
+test = false
+
 [dependencies]
 alloy = { version = "1.0.24", features = ["node-bindings", "rpc-client"] }
 eyre = "0.6.12"

@@ -3,5 +3,10 @@ name = "sync"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "sync"
+path = "src/lib.rs"
+test = false
+
 [dependencies]
 tokio = { version = "1.47.1", features = ["rt-multi-thread", "macros", "sync", "time"] }

@@ -4,7 +4,7 @@
 # Variables
 CARGO := cargo
 
-.PHONY: help fmt fmt-check lint build test clean
+.PHONY: help fmt fmt-check lint build test test-all clean
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -21,7 +21,10 @@ lint: ## Run Clippy linter
 build: ## Build the whole workspace
 	$(CARGO) build --workspace
 
-test: ## Run all tests
+test: ## Run all tests (ignore docs)
+	$(CARGO) test --workspace --tests
+
+test-all: ## Run all tests
 	$(CARGO) test --workspace
 
 clean: ## Clean target directory
@@ -30,4 +33,4 @@ clean: ## Clean target directory
 check: ## Run fmt-check, lint, and tests
 	@$(MAKE) fmt-check
 	@$(MAKE) lint
-	@$(MAKE) test
+	@$(MAKE) test-all
