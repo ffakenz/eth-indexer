@@ -39,7 +39,7 @@ mod tests {
 
         // Create a RPC client provider.
         let rpc_url = anvil.endpoint_url();
-        let node_client = NodeClient::new(rpc_url, pk);
+        let node_client = NodeClient::new(rpc_url.clone(), pk.clone());
 
         // Deploy the `ZamaToken` contract.
         println!("Deploying contract...");
@@ -50,9 +50,12 @@ mod tests {
 
         // Get two accounts from Anvil, Alice and Bob.
         let accounts = node_client.get_accounts().await?;
-        let alice = accounts[0];
+        let alice = accounts[1];
+        let alice_pk: PrivateKeySigner = anvil.keys()[1].clone().into();
+        let alice_client = NodeClient::new(rpc_url.clone(), alice_pk);
+        let alice_contract = ZamaToken::new(*contract.address(), alice_client.borrow_provider());
         println!("Alice: {alice:?}");
-        let bob = accounts[1];
+        let bob = accounts[2];
         println!("Bob: {bob:?}");
 
         // Fetch latest block after scenario setup
@@ -76,7 +79,8 @@ mod tests {
 
         // Send transfer 1 from Alice -> Bob (before engine startup)
         let amount_1 = U256::from(100);
-        let tx_hash_1 = contract.transfer(bob, amount_1).send().await?.watch().await?;
+        alice_contract.approve(pk.address(), amount_1).send().await?.watch().await?;
+        let tx_hash_1 = contract.transferFrom(alice, bob, amount_1).send().await?.watch().await?;
         println!("Sent transfer tx: {tx_hash_1}");
         expected_tx_hashes.insert(tx_hash_1);
 
@@ -92,7 +96,8 @@ mod tests {
 
         // Send transfer 2 from Alice -> Bob (after engine startup)
         let amount_2 = U256::from(100);
-        let tx_hash_2 = contract.transfer(bob, amount_2).send().await?.watch().await?;
+        alice_contract.approve(pk.address(), amount_2).send().await?.watch().await?;
+        let tx_hash_2 = contract.transferFrom(alice, bob, amount_2).send().await?.watch().await?;
         println!("Sent transfer tx2: {tx_hash_2}");
         expected_tx_hashes.insert(tx_hash_2);
 
