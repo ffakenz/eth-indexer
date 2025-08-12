@@ -39,6 +39,7 @@ pub async fn chunked_backfill(
     let final_checkpoint = Checkpoint {
         block_number: latest_block_number as i64,
         block_hash: latest_block_hash.to_vec(),
+        parent_hash: latest_block.header.parent_hash.to_vec(),
     };
 
     // Process historical chunks until we reach the snapshot tip

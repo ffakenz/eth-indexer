@@ -18,8 +18,11 @@ impl Store {
 
     pub async fn insert_transfer(&self, log: &Transfer) -> Result<()> {
         let query = r#"
-            INSERT INTO transfers (block_number, block_hash, transaction_hash, log_index, data)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO transfers (
+                block_number, block_hash, transaction_hash, log_index,
+                contract_address, from_address, to_address, amount
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             "#;
 
         sqlx::query(query)
@@ -27,7 +30,10 @@ impl Store {
             .bind(&log.block_hash[..])
             .bind(&log.transaction_hash[..])
             .bind(log.log_index)
-            .bind(&log.data)
+            .bind(&log.contract_address)
+            .bind(&log.from_address)
+            .bind(&log.to_address)
+            .bind(&log.amount)
             .execute(self.client.pool())
             .await?;
         Ok(())
@@ -38,7 +44,9 @@ impl Store {
         from_block_number: BlockNumber,
     ) -> Result<Vec<Transfer>> {
         let query = r#"
-            SELECT block_number, block_hash, transaction_hash, log_index, data
+            SELECT
+                block_number, block_hash, transaction_hash, log_index,
+                contract_address, from_address, to_address, amount
             FROM transfers
             WHERE block_number >= ?
             ORDER BY block_number ASC, log_index ASC
@@ -57,7 +65,9 @@ impl Store {
         to_block: BlockNumber,
     ) -> Result<Vec<Transfer>> {
         let query = r#"
-            SELECT block_number, block_hash, transaction_hash, log_index, data
+            SELECT
+                block_number, block_hash, transaction_hash, log_index,
+                contract_address, from_address, to_address, amount
             FROM transfers
             WHERE block_number BETWEEN ? AND ?
             ORDER BY block_number ASC, log_index ASC
@@ -65,26 +75,6 @@ impl Store {
         let logs = sqlx::query_as(query)
             .bind(from_block as i64)
             .bind(to_block as i64)
-            .fetch_all(self.client.pool())
-            .await?;
-
-        Ok(logs)
-    }
-
-    pub async fn get_transfers_between_block_hashes(
-        &self,
-        from_hash: BlockHash,
-        to_hash: BlockHash,
-    ) -> Result<Vec<Transfer>> {
-        let query = r#"
-            SELECT block_number, block_hash, transaction_hash, log_index, data
-            FROM transfers
-            WHERE block_hash >= ? AND block_hash <= ?
-            ORDER BY block_number ASC, log_index ASC
-            "#;
-        let logs = sqlx::query_as(query)
-            .bind(&from_hash[..])
-            .bind(&to_hash[..])
             .fetch_all(self.client.pool())
             .await?;
 
@@ -99,14 +89,16 @@ impl Store {
         &self,
         block_number: BlockNumber,
         block_hash: BlockHash,
+        parent_hash: BlockHash,
     ) -> Result<()> {
         let query = r#"
-            INSERT INTO checkpoints (block_number, block_hash)
-            VALUES (?, ?)
+            INSERT INTO checkpoints (block_number, block_hash, parent_hash)
+            VALUES (?, ?, ?)
             "#;
         sqlx::query(query)
             .bind(block_number as i64)
             .bind(&block_hash[..])
+            .bind(&parent_hash[..])
             .execute(self.client.pool())
             .await?;
         Ok(())
@@ -114,7 +106,7 @@ impl Store {
 
     pub async fn get_last_checkpoint(&self) -> Result<Option<Checkpoint>> {
         let query = r#"
-            SELECT block_number, block_hash
+            SELECT block_number, block_hash, parent_hash
             FROM checkpoints
             ORDER BY id DESC
             LIMIT 1
@@ -129,7 +121,7 @@ impl Store {
         block_number: BlockNumber,
     ) -> Result<Option<Checkpoint>> {
         let query = r#"
-            SELECT block_number, block_hash
+            SELECT block_number, block_hash, parent_hash
             FROM checkpoints
             WHERE block_number = ?
             LIMIT 1
@@ -147,7 +139,7 @@ impl Store {
         block_hash: BlockHash,
     ) -> Result<Option<Checkpoint>> {
         let query = r#"
-            SELECT block_number, block_hash
+            SELECT block_number, block_hash, parent_hash
             FROM checkpoints
             WHERE block_hash = ?
             LIMIT 1

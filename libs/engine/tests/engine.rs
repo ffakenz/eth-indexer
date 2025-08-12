@@ -51,12 +51,14 @@ mod tests {
         // Get two accounts from Anvil, Alice and Bob.
         let accounts = node_client.get_accounts().await?;
         let alice = accounts[0];
+        println!("Alice: {alice:?}");
         let bob = accounts[1];
+        println!("Bob: {bob:?}");
 
         // Fetch latest block after scenario setup
-        let latest_block = node_client.get_latest_block().await?.unwrap();
-        let latest_block_hash = latest_block.hash();
-        println!("Latest block: {latest_block_hash:?}");
+        let start_block = node_client.get_latest_block().await?.unwrap();
+        let start_block_hash = start_block.hash();
+        println!("Start block: {start_block_hash:?}");
 
         let mut expected_tx_hashes: HashSet<TxHash> = HashSet::new();
 
@@ -82,7 +84,7 @@ mod tests {
         let args = engine::args::Args {
             address: *contract.address(),
             event: "Transfer(address,address,uint256)".to_string(),
-            from_block: latest_block_hash,
+            from_block: start_block_hash,
             backfill_chunk_size: 1000,
             poll_interval: Duration::from_millis(100),
         };
@@ -97,16 +99,19 @@ mod tests {
         // Let the engine run for a few iterations
         tokio::time::sleep(Duration::from_secs(3)).await;
 
-        let mut collected_transfers =
-            store.get_transfers_from_block_number(latest_block.number()).await?;
+        let latest_block = node_client.get_latest_block().await?.unwrap();
+        let collected_transfers = store
+            .get_transfers_between_block_numbers(start_block.number(), latest_block.number())
+            .await?;
 
         assert_eq!(collected_transfers.len(), 3);
-        while let Some(transfer) = &collected_transfers.pop() {
+        for transfer in &collected_transfers {
             println!("Collected: {transfer:?}");
             let log_tx_hash: TxHash = transfer.transaction_hash.as_slice().try_into().unwrap();
             assert!(expected_tx_hashes.contains(&log_tx_hash));
             expected_tx_hashes.remove(&log_tx_hash);
         }
+        assert!(expected_tx_hashes.is_empty());
 
         // Stop the engine
         engine.shutdown().await;
