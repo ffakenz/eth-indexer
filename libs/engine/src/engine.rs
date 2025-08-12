@@ -47,7 +47,7 @@ impl Engine {
         // -- Spawn Producer --
         let next_checkpoint_number = checkpoint_number + 1;
         let shared_logs_stream =
-            crate::utils::get_logs_stream(&args, node_client, next_checkpoint_number).await?;
+            crate::utils::watch_logs_stream(&args, node_client, next_checkpoint_number).await?;
         let producer_handle =
             crate::utils::spawn_producer(tx, shutdown_tx.clone(), Arc::clone(&shared_logs_stream))
                 .await;

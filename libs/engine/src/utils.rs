@@ -62,44 +62,6 @@ pub async fn chunked_backfill(
     Ok((collected_logs, latest_block_number, latest_block_hash))
 }
 
-pub async fn gap_fill(
-    args: &Args,
-    node_client: &NodeClient,
-) -> Result<(VecDeque<Log>, BlockNumber, BlockHash)> {
-    // Lookup checkpoint block
-    let checkpoint_block: Block = node_client
-        .get_block_by_hash(args.from_block)
-        .await?
-        .ok_or_else(|| Report::msg(format!("Checkpoint block not found: {:?}", args.from_block)))?;
-
-    // Local mut state
-    let mut checkpoint_hash: BlockHash = checkpoint_block.hash();
-    let mut checkpoint_number: BlockNumber = checkpoint_block.number();
-    let mut collected_logs: VecDeque<Log> = VecDeque::new();
-
-    // Moonwalk blocks and logs from checkpoint
-    let blocks: Vec<Block> = node_client.moonwalk_blocks(checkpoint_hash).await?;
-    for block in &blocks {
-        let block_logs =
-            node_client.filtered_tx_logs_from_block(block, &args.address, &args.event).await?;
-        for log in block_logs {
-            // push_front because moonwalk is FIFO
-            collected_logs.push_front(log);
-        }
-        // Update checkpoint to latest block hash after processing last log
-        checkpoint_hash = block.hash();
-        checkpoint_number = block.number();
-    }
-
-    // Consume moonwalked logs
-    for log in &collected_logs {
-        // TODO! persist log + checkpoint into store (SQLite)
-        println!("Consumed log: {log:?}");
-    }
-
-    Ok((collected_logs, checkpoint_number, checkpoint_hash))
-}
-
 pub async fn spawn_consumer(
     rx: mpsc::Receiver<Result<Log, Report>>,
     shutdown_tx: broadcast::Sender<()>,
@@ -130,7 +92,7 @@ pub async fn spawn_consumer(
     Consumer::spawn(rx, shutdown_tx.clone(), consumer_callback)
 }
 
-pub async fn get_logs_stream(
+pub async fn watch_logs_stream(
     args: &Args,
     node_client: &NodeClient,
     checkpoint_number: BlockNumber,
