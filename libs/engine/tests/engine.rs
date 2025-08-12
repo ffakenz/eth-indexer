@@ -26,6 +26,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_polling_transfer_event_logs() -> Result<()> {
+        // Init SQLite store
+        let db_url = "sqlite::memory:";
+        let client = Client::init(db_url).await?;
+        let store = Arc::new(Store::new(client));
+
         // Spin up a local Anvil node.
         // Ensure `anvil` is available in $PATH.
         let anvil = Anvil::new().block_time(1).try_spawn()?;
@@ -73,14 +78,7 @@ mod tests {
         println!("Sent transfer tx: {tx_hash_1}");
         expected_tx_hashes.insert(tx_hash_1);
 
-        let tx_1_block = node_client.get_latest_block().await?.unwrap();
-        let tx_1_block_hash = tx_1_block.hash();
-        println!("Tx-1 block: {tx_1_block_hash:?}");
-
         // Start the engine
-        let db_url = "sqlite::memory:";
-        let client = Client::init(db_url).await?;
-        let store = Arc::new(Store::new(client));
         let args = engine::args::Args {
             address: *contract.address(),
             event: "Transfer(address,address,uint256)".to_string(),
@@ -96,16 +94,15 @@ mod tests {
         println!("Sent transfer tx2: {tx_hash_2}");
         expected_tx_hashes.insert(tx_hash_2);
 
-        let tx_2_block = node_client.get_latest_block().await?.unwrap();
-        let tx_2_block_hash = tx_2_block.hash();
-        println!("Tx-2 block: {tx_2_block_hash:?}");
-
         // Let the engine run for a few iterations
         tokio::time::sleep(Duration::from_secs(3)).await;
+
         let mut collected_transfers =
-            store.get_transfers_between_block_hashes(latest_block_hash, tx_2_block_hash).await?;
+            store.get_transfers_from_block_number(latest_block.number()).await?;
+
+        assert_eq!(collected_transfers.len(), 3);
         while let Some(transfer) = &collected_transfers.pop() {
-            println!("Collected Transfer: {transfer:?}");
+            println!("Collected: {transfer:?}");
             let log_tx_hash: TxHash = transfer.transaction_hash.as_slice().try_into().unwrap();
             assert!(expected_tx_hashes.contains(&log_tx_hash));
             expected_tx_hashes.remove(&log_tx_hash);

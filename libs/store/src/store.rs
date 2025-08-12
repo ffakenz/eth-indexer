@@ -33,6 +33,24 @@ impl Store {
         Ok(())
     }
 
+    pub async fn get_transfers_from_block_number(
+        &self,
+        from_block_number: BlockNumber,
+    ) -> Result<Vec<Transfer>> {
+        let query = r#"
+            SELECT block_number, block_hash, transaction_hash, log_index, data
+            FROM transfers
+            WHERE block_number >= ?
+            ORDER BY block_number ASC, log_index ASC
+            "#;
+        let logs = sqlx::query_as(query)
+            .bind(from_block_number as i64)
+            .fetch_all(self.client.pool())
+            .await?;
+
+        Ok(logs)
+    }
+
     pub async fn get_transfers_between_block_numbers(
         &self,
         from_block: BlockNumber,

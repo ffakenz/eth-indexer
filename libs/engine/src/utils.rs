@@ -56,10 +56,8 @@ pub async fn chunked_backfill(
             .await?;
 
         for log in &logs {
-            // TODO! persist log + checkpoint into store (SQLite)
-            println!("Consumed log: {log:?}");
-            // push_back because get_logs is LIFO
             let transfer: Transfer = log.try_into()?;
+            println!("Consumed: {transfer:?}");
             store.insert_transfer(&transfer).await?;
         }
 
@@ -70,28 +68,25 @@ pub async fn chunked_backfill(
 }
 
 pub async fn spawn_consumer(
-    rx: mpsc::Receiver<Result<Log, Report>>,
+    rx: mpsc::Receiver<Result<Transfer, Report>>,
     shutdown_tx: broadcast::Sender<()>,
     store: Arc<Store>,
 ) -> tokio::task::JoinHandle<()> {
     // A closure that returns a future.
-    let consumer_callback = move |consumed_log: Result<Log>| {
+    let consumer_callback = move |consumed_transfer: Result<Transfer>| {
         let store_for_consumer = Arc::clone(&store);
         async move {
-            match &consumed_log {
-                Err(e) => eprintln!("Consumed Log Failed: {e:?}"),
-                Ok(log) => match log.try_into() {
-                    Err(e) => eprintln!("Consumed Log: {log:?} - TryFrom Failed: {e:?}"),
-                    Ok(transfer) => match store_for_consumer.insert_transfer(&transfer).await {
-                        Err(e) => eprintln!("Consumed Log: {log:?} - Store Failed: {e:?}"),
-                        Ok(_) => println!("Consumed Log: {log:?}"),
-                    },
+            match &consumed_transfer {
+                Err(e) => eprintln!("Consumer Failed: {e:?}"),
+                Ok(transfer) => match store_for_consumer.insert_transfer(transfer).await {
+                    Err(e) => eprintln!("Consumer Failed: {e:?} |> {transfer:?}"),
+                    Ok(_) => println!("Consumed: {transfer:?}"),
                 },
             }
         }
     };
 
-    // Spawn consumer: consumes logs from rx (producer)
+    // Spawn consumer: consumes transfers from rx (producer)
     Consumer::spawn(rx, shutdown_tx.clone(), consumer_callback)
 }
 
@@ -114,7 +109,7 @@ pub async fn watch_logs_stream(
 }
 
 pub async fn spawn_producer(
-    tx: mpsc::Sender<Result<Log, Report>>,
+    tx: mpsc::Sender<Result<Transfer, Report>>,
     shutdown_tx: broadcast::Sender<()>,
     shared_logs_stream: Arc<Mutex<Pin<Box<impl Stream<Item = Log> + Send + 'static>>>>,
 ) -> tokio::task::JoinHandle<()> {
@@ -123,10 +118,10 @@ pub async fn spawn_producer(
         let logs_stream_for_producer = Arc::clone(&shared_logs_stream);
         async move {
             let mut locked_stream = logs_stream_for_producer.lock().await;
-            match locked_stream.next().await {
+            match &locked_stream.next().await {
                 Some(log) => {
                     drop(locked_stream);
-                    Ok(log)
+                    log.try_into()
                 }
                 None => {
                     drop(locked_stream);
@@ -136,6 +131,6 @@ pub async fn spawn_producer(
         }
     };
 
-    // Spawn producer: produces logs received from stream and sends them to tx (consumer)
+    // Spawn producer: produces transfers received from logs stream and sends them to tx (consumer)
     Producer::spawn(tx, shutdown_tx, producer_callback)
 }
