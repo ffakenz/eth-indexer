@@ -15,9 +15,10 @@ pub struct Engine {
 
 impl Engine {
     pub async fn start(args: Args, node_client: &NodeClient) -> Result<Engine> {
-        // 1. Run moonwalk synchronously, collect logs gap-fill
+        // 1. Run backfill synchronously, collect logs gap-fill
+
         let (collected_logs, checkpoint_number, checkpoint_hash) =
-            crate::utils::gap_fill(&args, node_client).await?;
+            crate::utils::chunked_backfill(&args, node_client, args.backfill_chunk_size).await?;
 
         // 2. Run watch asynchronously, collect logs live
 
@@ -44,12 +45,7 @@ impl Engine {
         .await;
 
         // -- Spawn Producer --
-        let next_checkpoint_number = {
-            let locked_collected_logs = shared_collected_logs.lock().await;
-            let next_checkpoint_number = checkpoint_number + locked_collected_logs.len() as u64;
-            drop(locked_collected_logs);
-            next_checkpoint_number
-        };
+        let next_checkpoint_number = checkpoint_number + 1;
         let shared_logs_stream =
             crate::utils::get_logs_stream(&args, node_client, next_checkpoint_number).await?;
         let producer_handle =

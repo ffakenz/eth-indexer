@@ -71,6 +71,22 @@ impl NodeClient {
         self.provider.get_accounts().await
     }
 
+    pub async fn get_logs(
+        &self,
+        address: &Address,
+        event: &str,
+        from_block_number: BlockNumberOrTag,
+        to_block_number: BlockNumberOrTag,
+    ) -> Result<Vec<Log>, RpcError<TransportErrorKind>> {
+        let filter = Filter::new()
+            .address(*address)
+            .event(event)
+            .from_block(from_block_number)
+            .to_block(to_block_number);
+
+        self.provider.get_logs(&filter).await
+    }
+
     pub async fn watch_logs(
         &self,
         address: &Address,

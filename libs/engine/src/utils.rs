@@ -11,6 +11,57 @@ use std::sync::Arc;
 use sync::{consumer::Consumer, producer::Producer};
 use tokio::sync::{Mutex, broadcast, mpsc};
 
+pub async fn chunked_backfill(
+    args: &Args,
+    node_client: &NodeClient,
+    chunk_size: u64,
+) -> Result<(VecDeque<Log>, BlockNumber, BlockHash)> {
+    // Lookup latest block
+    let latest_block: Block = node_client
+        .get_latest_block()
+        .await?
+        .ok_or_else(|| Report::msg("Latest block not found"))?;
+
+    let latest_block_number: BlockNumber = latest_block.number();
+    let latest_block_hash: BlockHash = latest_block.hash();
+
+    // Lookup checkpoint block
+    let checkpoint_block: Block = node_client
+        .get_block_by_hash(args.from_block)
+        .await?
+        .ok_or_else(|| Report::msg(format!("Checkpoint block not found: {:?}", args.from_block)))?;
+
+    // Local mut state
+    let mut checkpoint_number: BlockNumber = checkpoint_block.number();
+    let mut collected_logs: VecDeque<Log> = VecDeque::new();
+
+    // Process historical chunks until we reach the snapshot tip
+    while checkpoint_number <= latest_block_number {
+        let to_block_number_chunk =
+            std::cmp::min(checkpoint_number + chunk_size - 1, latest_block_number);
+
+        let logs: Vec<Log> = node_client
+            .get_logs(
+                &args.address,
+                &args.event,
+                checkpoint_number.into(),
+                to_block_number_chunk.into(),
+            )
+            .await?;
+
+        for log in logs {
+            // TODO! persist log + checkpoint into store (SQLite)
+            println!("Consumed log: {log:?}");
+            // push_back because get_logs is LIFO
+            collected_logs.push_back(log);
+        }
+
+        checkpoint_number = to_block_number_chunk + 1;
+    }
+
+    Ok((collected_logs, latest_block_number, latest_block_hash))
+}
+
 pub async fn gap_fill(
     args: &Args,
     node_client: &NodeClient,

@@ -76,6 +76,7 @@ mod tests {
             address: *contract.address(),
             event: "Transfer(address,address,uint256)".to_string(),
             from_block: latest_block_hash,
+            backfill_chunk_size: 1000,
             poll_interval: Duration::from_millis(100),
         };
         let engine = Engine::start(args, &node_client).await?;
