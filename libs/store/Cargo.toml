@@ -1,0 +1,11 @@
+[package]
+name = "store"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "store"
+path = "src/lib.rs"
+test = false
+
+[dependencies]
