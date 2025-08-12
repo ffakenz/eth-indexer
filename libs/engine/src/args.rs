@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use alloy::primitives::{Address, BlockHash};
 
-#[derive(Clone)]
 pub struct Args {
     pub address: Address,
     pub event: String,

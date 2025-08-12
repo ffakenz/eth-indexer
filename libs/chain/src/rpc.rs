@@ -36,7 +36,6 @@ type NodeClientProvider = FillProvider<
     RootProvider,
 >;
 
-#[derive(Clone)]
 pub struct NodeClient {
     provider: NodeClientProvider,
 }
