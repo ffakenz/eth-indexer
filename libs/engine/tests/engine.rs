@@ -21,7 +21,7 @@ mod tests {
         #[allow(missing_docs)]
         #[sol(rpc)]
         ZamaToken,
-        "../../tests/resources/zamatoken/ZamaToken.json"
+        "../../resources/tests/zamatoken/ZamaToken.json"
     );
 
     #[tokio::test]
