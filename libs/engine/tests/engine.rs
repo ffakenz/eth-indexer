@@ -2,7 +2,9 @@
 mod tests {
     use engine::engine::Engine;
     use eyre::Result;
+    use store::{client::Client, store::Store};
 
+    use std::sync::Arc;
     use std::{collections::HashSet, time::Duration};
 
     use alloy::{
@@ -71,7 +73,14 @@ mod tests {
         println!("Sent transfer tx: {tx_hash_1}");
         expected_tx_hashes.insert(tx_hash_1);
 
+        let tx_1_block = node_client.get_latest_block().await?.unwrap();
+        let tx_1_block_hash = tx_1_block.hash();
+        println!("Tx-1 block: {tx_1_block_hash:?}");
+
         // Start the engine
+        let db_url = "sqlite::memory:";
+        let client = Client::init(db_url).await?;
+        let store = Arc::new(Store::new(client));
         let args = engine::args::Args {
             address: *contract.address(),
             event: "Transfer(address,address,uint256)".to_string(),
@@ -79,7 +88,7 @@ mod tests {
             backfill_chunk_size: 1000,
             poll_interval: Duration::from_millis(100),
         };
-        let engine = Engine::start(args, &node_client).await?;
+        let engine = Engine::start(args, &node_client, Arc::clone(&store)).await?;
 
         // Send transfer 2 from Alice -> Bob (after engine startup)
         let amount_2 = U256::from(100);
@@ -87,14 +96,19 @@ mod tests {
         println!("Sent transfer tx2: {tx_hash_2}");
         expected_tx_hashes.insert(tx_hash_2);
 
+        let tx_2_block = node_client.get_latest_block().await?.unwrap();
+        let tx_2_block_hash = tx_2_block.hash();
+        println!("Tx-2 block: {tx_2_block_hash:?}");
+
         // Let the engine run for a few iterations
         tokio::time::sleep(Duration::from_secs(3)).await;
-        let mut collected_logs = engine.get_collected_logs().await;
-        while let Some(log) = collected_logs.pop_front() {
-            println!("Collected Transfer: {log:?}");
-            let log_tx_hash = &log.transaction_hash.unwrap();
-            assert!(expected_tx_hashes.contains(log_tx_hash));
-            expected_tx_hashes.remove(log_tx_hash);
+        let mut collected_transfers =
+            store.get_transfers_between_block_hashes(latest_block_hash, tx_2_block_hash).await?;
+        while let Some(transfer) = &collected_transfers.pop() {
+            println!("Collected Transfer: {transfer:?}");
+            let log_tx_hash: TxHash = transfer.transaction_hash.as_slice().try_into().unwrap();
+            assert!(expected_tx_hashes.contains(&log_tx_hash));
+            expected_tx_hashes.remove(&log_tx_hash);
         }
 
         // Stop the engine

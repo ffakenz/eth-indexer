@@ -5,17 +5,28 @@ use chain::rpc::NodeClient;
 use eyre::{Report, Result};
 use futures_util::stream::{self};
 use futures_util::{Stream, StreamExt};
-use std::collections::VecDeque;
+use std::convert::TryInto;
 use std::pin::Pin;
 use std::sync::Arc;
+use store::model::{Checkpoint, Transfer};
+use store::store::Store;
 use sync::{consumer::Consumer, producer::Producer};
 use tokio::sync::{Mutex, broadcast, mpsc};
 
 pub async fn chunked_backfill(
     args: &Args,
     node_client: &NodeClient,
-    chunk_size: u64,
-) -> Result<(VecDeque<Log>, BlockNumber, BlockHash)> {
+    store: Arc<Store>,
+) -> Result<Checkpoint> {
+    // Lookup checkpoint block
+    let checkpoint_block: Block = node_client
+        .get_block_by_hash(args.from_block)
+        .await?
+        .ok_or_else(|| Report::msg(format!("Checkpoint block not found: {:?}", args.from_block)))?;
+
+    // Local mut state
+    let mut checkpoint_number: BlockNumber = checkpoint_block.number();
+
     // Lookup latest block
     let latest_block: Block = node_client
         .get_latest_block()
@@ -25,20 +36,15 @@ pub async fn chunked_backfill(
     let latest_block_number: BlockNumber = latest_block.number();
     let latest_block_hash: BlockHash = latest_block.hash();
 
-    // Lookup checkpoint block
-    let checkpoint_block: Block = node_client
-        .get_block_by_hash(args.from_block)
-        .await?
-        .ok_or_else(|| Report::msg(format!("Checkpoint block not found: {:?}", args.from_block)))?;
-
-    // Local mut state
-    let mut checkpoint_number: BlockNumber = checkpoint_block.number();
-    let mut collected_logs: VecDeque<Log> = VecDeque::new();
+    let final_checkpoint = Checkpoint {
+        block_number: latest_block_number as i64,
+        block_hash: latest_block_hash.to_vec(),
+    };
 
     // Process historical chunks until we reach the snapshot tip
     while checkpoint_number <= latest_block_number {
         let to_block_number_chunk =
-            std::cmp::min(checkpoint_number + chunk_size - 1, latest_block_number);
+            std::cmp::min(checkpoint_number + args.backfill_chunk_size - 1, latest_block_number);
 
         let logs: Vec<Log> = node_client
             .get_logs(
@@ -49,41 +55,38 @@ pub async fn chunked_backfill(
             )
             .await?;
 
-        for log in logs {
+        for log in &logs {
             // TODO! persist log + checkpoint into store (SQLite)
             println!("Consumed log: {log:?}");
             // push_back because get_logs is LIFO
-            collected_logs.push_back(log);
+            let transfer: Transfer = log.try_into()?;
+            store.insert_transfer(&transfer).await?;
         }
 
         checkpoint_number = to_block_number_chunk + 1;
     }
 
-    Ok((collected_logs, latest_block_number, latest_block_hash))
+    Ok(final_checkpoint)
 }
 
 pub async fn spawn_consumer(
     rx: mpsc::Receiver<Result<Log, Report>>,
     shutdown_tx: broadcast::Sender<()>,
-    shared_collected_logs: Arc<Mutex<VecDeque<Log>>>,
-    shared_checkpoint_hash: Arc<Mutex<BlockHash>>,
+    store: Arc<Store>,
 ) -> tokio::task::JoinHandle<()> {
     // A closure that returns a future.
     let consumer_callback = move |consumed_log: Result<Log>| {
-        let collected_logs_for_consumer = Arc::clone(&shared_collected_logs);
-        let checkpoint_hash_for_consumer = Arc::clone(&shared_checkpoint_hash);
+        let store_for_consumer = Arc::clone(&store);
         async move {
-            let mut locked_collected_logs = collected_logs_for_consumer.lock().await;
-            let mut locked_checkpoint_hash = checkpoint_hash_for_consumer.lock().await;
-            if let Ok(log) = consumed_log {
-                if let Some(log_hash) = log.block_hash {
-                    // TODO! persist log + checkpoint into store (SQLite)
-                    println!("Consumed log: {log:?}");
-                    *locked_checkpoint_hash = log_hash;
-                    locked_collected_logs.push_back(log);
-                    drop(locked_collected_logs);
-                    drop(locked_checkpoint_hash);
-                }
+            match &consumed_log {
+                Err(e) => eprintln!("Consumed Log Failed: {e:?}"),
+                Ok(log) => match log.try_into() {
+                    Err(e) => eprintln!("Consumed Log: {log:?} - TryFrom Failed: {e:?}"),
+                    Ok(transfer) => match store_for_consumer.insert_transfer(&transfer).await {
+                        Err(e) => eprintln!("Consumed Log: {log:?} - Store Failed: {e:?}"),
+                        Ok(_) => println!("Consumed Log: {log:?}"),
+                    },
+                },
             }
         }
     };
