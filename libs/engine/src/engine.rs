@@ -1,5 +1,5 @@
 use crate::args::Args;
-use crate::processor::Processor;
+use crate::processor::handle::Processor;
 use alloy::rpc::types::Log;
 use chain::rpc::NodeClient;
 use eyre::Result;
@@ -19,7 +19,7 @@ impl Engine {
         args: &Args,
         node_client: &NodeClient,
         checkpoint_store: Arc<CheckpointStore>,
-        processor: Arc<dyn Processor<T>>,
+        processor: Arc<dyn Processor<Log, T>>,
     ) -> Result<Engine> {
         // 1. Run backfill synchronously, collect logs gap-fill
 

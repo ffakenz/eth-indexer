@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod tests {
     use alloy::primitives::BlockHash;
-    use alloy::rpc::types::ValueOrArray;
+    use alloy::rpc::types::{Log, ValueOrArray};
     use engine::engine::Engine;
-    use engine::processor::{Processor, TransferProcessor};
+    use engine::processor::{handle::Processor, transfer::TransferProcessor};
     use eyre::Result;
     use store::checkpoint::store::Store as CheckpointStore;
     use store::client::Client;
@@ -37,7 +37,7 @@ mod tests {
         let client = Client::init(db_url).await?;
         let checkpoint_store = Arc::new(CheckpointStore::new(client.clone()));
         let transfer_store = TransferStore::new(client.clone());
-        let transfer_processor: Arc<dyn Processor<Option<Transfer>>> =
+        let transfer_processor: Arc<dyn Processor<Log, Option<Transfer>>> =
             Arc::new(TransferProcessor { store: TransferStore::new(client.clone()) });
 
         // Spin up a local Anvil node.

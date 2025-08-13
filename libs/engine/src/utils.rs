@@ -1,5 +1,5 @@
 use crate::args::Args;
-use crate::processor::Processor;
+use crate::processor::handle::Processor;
 use alloy::primitives::{BlockHash, BlockNumber};
 use alloy::rpc::types::{Block, Log};
 use chain::rpc::NodeClient;
@@ -18,7 +18,7 @@ pub async fn chunked_backfill<T>(
     args: &Args,
     node_client: &NodeClient,
     checkpoint_store: Arc<CheckpointStore>,
-    processor: Arc<dyn Processor<T>>,
+    processor: Arc<dyn Processor<Log, T>>,
 ) -> Result<Checkpoint> {
     // Lookup checkpoint block
     let checkpoint_block: Block = node_client
@@ -113,14 +113,14 @@ pub async fn spawn_consumer<T: Send + Sync + 'static>(
     shutdown_tx: broadcast::Sender<()>,
     node_client: &NodeClient,
     checkpoint_store: Arc<CheckpointStore>,
-    processor: Arc<dyn Processor<T>>,
+    processor: Arc<dyn Processor<Log, T>>,
 ) -> tokio::task::JoinHandle<()> {
     // A closure that returns a future.
     let node_client_cloned = node_client.clone();
     let shutdown_tx_cloned = shutdown_tx.clone();
     let consumer_callback = move |consumed_log: Result<Log>| {
         let checkpoint_store_for_consumer: Arc<CheckpointStore> = Arc::clone(&checkpoint_store);
-        let processor_for_consumer: Arc<dyn Processor<T>> = Arc::clone(&processor);
+        let processor_for_consumer: Arc<dyn Processor<Log, T>> = Arc::clone(&processor);
         let node_client_for_consumer = node_client_cloned.clone();
         let shutdown_tx_for_consumerr = shutdown_tx_cloned.clone();
         async move {

@@ -3,17 +3,14 @@ use eyre::{Result, eyre};
 use sqlx::Error;
 use store::transfer::{model::Transfer, store::Store};
 
-#[async_trait::async_trait]
-pub trait Processor<T>: Send + Sync {
-    async fn process_log(&self, log: &Log) -> Result<T>;
-}
+use crate::processor::handle::Processor;
 
 pub struct TransferProcessor {
     pub store: Store,
 }
 
 #[async_trait::async_trait]
-impl Processor<Option<Transfer>> for TransferProcessor {
+impl Processor<Log, Option<Transfer>> for TransferProcessor {
     async fn process_log(&self, log: &Log) -> Result<Option<Transfer>> {
         let transfer: Transfer = log.try_into()?;
         match self.store.insert_transfer(&transfer).await {
