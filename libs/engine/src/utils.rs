@@ -11,15 +11,18 @@ use sqlx::Error;
 use std::convert::TryInto;
 use std::pin::Pin;
 use std::sync::Arc;
-use store::model::{Checkpoint, Transfer};
-use store::store::Store;
+use store::checkpoint::model::Checkpoint;
+use store::checkpoint::store::Store as CheckpointStore;
+use store::transfer::model::Transfer;
+use store::transfer::store::Store as TransferStore;
 use sync::{consumer::Consumer, producer::Producer};
 use tokio::sync::{Mutex, broadcast, mpsc};
 
 pub async fn chunked_backfill(
     args: &Args,
     node_client: &NodeClient,
-    store: Arc<Store>,
+    checkpoint_store: Arc<CheckpointStore>,
+    transfer_store: Arc<TransferStore>,
 ) -> Result<Checkpoint> {
     // Lookup checkpoint block
     let checkpoint_block: Block = node_client
@@ -61,7 +64,7 @@ pub async fn chunked_backfill(
 
         for log in &logs {
             let transfer: Transfer = log.try_into()?;
-            match store.insert_transfer(&transfer).await {
+            match transfer_store.insert_transfer(&transfer).await {
                 Ok(_) => println!("Consumed: {transfer:?}"),
                 Err(e) => {
                     if let Error::Database(db_err) = &e {
@@ -80,7 +83,7 @@ pub async fn chunked_backfill(
             }
         }
 
-        match save_checkpoint(to_block_number_chunk, node_client, &store).await {
+        match save_checkpoint(to_block_number_chunk, node_client, &checkpoint_store).await {
             Ok(success) => success,
             Err(e) => {
                 eprintln!("Consumer Failed: {e:?}");
@@ -97,7 +100,7 @@ pub async fn chunked_backfill(
 pub async fn save_checkpoint(
     block_number: BlockNumber,
     node_client: &NodeClient,
-    store: &Store,
+    checkpoint_store: &CheckpointStore,
 ) -> Result<()> {
     // Fetch latest processed block to build checkpoint
     let block = node_client
@@ -111,7 +114,7 @@ pub async fn save_checkpoint(
         parent_hash: block.header.parent_hash.to_vec(),
     };
 
-    store.insert_checkpoint(checkpoint).await?;
+    checkpoint_store.insert_checkpoint(checkpoint).await?;
     println!("Checkpoint saved at block number {block_number:?} and hash {}", block.hash());
     Ok(())
 }
@@ -120,14 +123,16 @@ pub async fn spawn_consumer(
     rx: mpsc::Receiver<Result<Transfer, Report>>,
     shutdown_tx: broadcast::Sender<()>,
     node_client: &NodeClient,
-    store: Arc<Store>,
+    checkpoint_store: Arc<CheckpointStore>,
+    transfer_store: Arc<TransferStore>,
 ) -> tokio::task::JoinHandle<()> {
     // A closure that returns a future.
     let node_client_cloned = node_client.clone();
     let shutdown_tx_cloned = shutdown_tx.clone();
     // let node_client_cloned = node_client.clone();
     let consumer_callback = move |consumed_transfer: Result<Transfer>| {
-        let store_for_consumer: Arc<Store> = Arc::clone(&store);
+        let checkpoint_store_for_consumer: Arc<CheckpointStore> = Arc::clone(&checkpoint_store);
+        let transfer_store_for_consumer: Arc<TransferStore> = Arc::clone(&transfer_store);
         let node_client_for_consumer = node_client_cloned.clone();
         let shutdown_tx_for_consumerr = shutdown_tx_cloned.clone();
         async move {
@@ -137,44 +142,46 @@ pub async fn spawn_consumer(
                     // stop signal
                     let _ = shutdown_tx_for_consumerr.send(());
                 }
-                Ok(transfer) => match store_for_consumer.insert_transfer(transfer).await {
-                    Ok(_) => {
-                        println!("Consumed: {transfer:?}");
-                        match save_checkpoint(
-                            transfer.block_number as u64,
-                            &node_client_for_consumer,
-                            &store_for_consumer,
-                        )
-                        .await
-                        {
-                            Ok(success) => success,
-                            Err(e) => {
-                                eprintln!("Consumer Failed: {e:?}");
-                                // stop signal
-                                let _ = shutdown_tx_for_consumerr.send(());
+                Ok(transfer) => {
+                    match transfer_store_for_consumer.insert_transfer(transfer).await {
+                        Ok(_) => {
+                            println!("Consumed: {transfer:?}");
+                            match save_checkpoint(
+                                transfer.block_number as u64,
+                                &node_client_for_consumer,
+                                &checkpoint_store_for_consumer,
+                            )
+                            .await
+                            {
+                                Ok(success) => success,
+                                Err(e) => {
+                                    eprintln!("Consumer Failed: {e:?}");
+                                    // stop signal
+                                    let _ = shutdown_tx_for_consumerr.send(());
+                                }
                             }
                         }
-                    }
-                    Err(e) => {
-                        if let Error::Database(db_err) = &e {
-                            if db_err.message().contains("UNIQUE constraint failed: transfers.transaction_hash, transfers.log_index") {
-                                println!(
-                                    "Duplicate transfer ignored: tx_hash={}, log_index={}",
-                                    hex::encode(&transfer.transaction_hash),
-                                    transfer.log_index
-                                );
+                        Err(e) => {
+                            if let Error::Database(db_err) = &e {
+                                if db_err.message().contains("UNIQUE constraint failed: transfers.transaction_hash, transfers.log_index") {
+                                    println!(
+                                        "Duplicate transfer ignored: tx_hash={}, log_index={}",
+                                        hex::encode(&transfer.transaction_hash),
+                                        transfer.log_index
+                                    );
+                                } else {
+                                    eprintln!("Consumer Failed: {e:?}");
+                                    // stop signal
+                                    let _ = shutdown_tx_for_consumerr.send(());
+                                }
                             } else {
-                                eprintln!("Consumer Failed: {e:?}");
+                                eprintln!("Consumer Fatal Error: {e:?}");
                                 // stop signal
                                 let _ = shutdown_tx_for_consumerr.send(());
                             }
-                        } else {
-                            eprintln!("Consumer Fatal Error: {e:?}");
-                            // stop signal
-                            let _ = shutdown_tx_for_consumerr.send(());
                         }
                     }
-                },
+                }
             }
         }
     };

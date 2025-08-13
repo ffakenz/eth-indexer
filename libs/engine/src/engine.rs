@@ -2,8 +2,9 @@ use crate::args::Args;
 use chain::rpc::NodeClient;
 use eyre::Result;
 use std::sync::Arc;
-use store::model::Transfer;
-use store::store::Store;
+use store::checkpoint::store::Store as CheckpointStore;
+use store::transfer::model::Transfer;
+use store::transfer::store::Store as TransferStore;
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
 
@@ -14,11 +15,21 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub async fn start(args: &Args, node_client: &NodeClient, store: Arc<Store>) -> Result<Engine> {
+    pub async fn start(
+        args: &Args,
+        node_client: &NodeClient,
+        checkpoint_store: Arc<CheckpointStore>,
+        transfer_store: Arc<TransferStore>,
+    ) -> Result<Engine> {
         // 1. Run backfill synchronously, collect logs gap-fill
 
-        let checkpoint =
-            crate::utils::chunked_backfill(args, node_client, Arc::clone(&store)).await?;
+        let checkpoint = crate::utils::chunked_backfill(
+            args,
+            node_client,
+            Arc::clone(&checkpoint_store),
+            Arc::clone(&transfer_store),
+        )
+        .await?;
 
         // 2. Run watch asynchronously, collect logs live
 
@@ -29,9 +40,14 @@ impl Engine {
         let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
         // -- Spawn Consumer --
-        let consumer_handle =
-            crate::utils::spawn_consumer(rx, shutdown_tx.clone(), node_client, Arc::clone(&store))
-                .await;
+        let consumer_handle = crate::utils::spawn_consumer(
+            rx,
+            shutdown_tx.clone(),
+            node_client,
+            Arc::clone(&checkpoint_store),
+            Arc::clone(&transfer_store),
+        )
+        .await;
 
         // -- Spawn Producer --
         let next_checkpoint_number = (checkpoint.block_number + 1) as u64;

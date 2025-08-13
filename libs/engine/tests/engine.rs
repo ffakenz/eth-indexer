@@ -3,7 +3,9 @@ mod tests {
     use alloy::primitives::BlockHash;
     use engine::engine::Engine;
     use eyre::Result;
-    use store::{client::Client, store::Store};
+    use store::checkpoint::store::Store as CheckpointStore;
+    use store::client::Client;
+    use store::transfer::store::Store as TransferStore;
 
     use std::sync::Arc;
     use std::{collections::HashSet, time::Duration};
@@ -30,7 +32,8 @@ mod tests {
         // Init SQLite store
         let db_url = "sqlite::memory:";
         let client = Client::init(db_url).await?;
-        let store = Arc::new(Store::new(client));
+        let checkpoint_store = Arc::new(CheckpointStore::new(client.clone()));
+        let transfer_store = Arc::new(TransferStore::new(client.clone()));
 
         // Spin up a local Anvil node.
         // Ensure `anvil` is available in $PATH.
@@ -93,7 +96,13 @@ mod tests {
             backfill_chunk_size: 1000,
             poll_interval: Duration::from_millis(100),
         };
-        let engine = Engine::start(&args, &node_client, Arc::clone(&store)).await?;
+        let engine = Engine::start(
+            &args,
+            &node_client,
+            Arc::clone(&checkpoint_store),
+            Arc::clone(&transfer_store),
+        )
+        .await?;
 
         // Send transfer 2 from Alice -> Bob (after engine startup)
         let amount_2 = U256::from(100);
@@ -106,7 +115,7 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(3)).await;
         let latest_block = node_client.get_latest_block().await?.unwrap();
 
-        let collected_transfers = store
+        let collected_transfers = transfer_store
             .get_transfers_between_block_numbers(start_block.number(), latest_block.number())
             .await?;
 
@@ -132,7 +141,7 @@ mod tests {
         println!("✅ Transfer event and balances verified");
 
         // Re-start the engine
-        let latest_checkpoint = store.get_last_checkpoint().await?.unwrap();
+        let latest_checkpoint = checkpoint_store.get_last_checkpoint().await?.unwrap();
         let args = engine::args::Args {
             address: *contract.address(),
             event: "Transfer(address,address,uint256)".to_string(),
@@ -140,7 +149,13 @@ mod tests {
             backfill_chunk_size: 1000,
             poll_interval: Duration::from_millis(100),
         };
-        let restarted_engine = Engine::start(&args, &node_client, Arc::clone(&store)).await?;
+        let restarted_engine = Engine::start(
+            &args,
+            &node_client,
+            Arc::clone(&checkpoint_store),
+            Arc::clone(&transfer_store),
+        )
+        .await?;
 
         // Let the engine run for a few iterations
         tokio::time::sleep(Duration::from_secs(3)).await;
@@ -150,7 +165,7 @@ mod tests {
 
         // Check collected results
         let collected_transfers_after_restart =
-            store.get_transfers_from_block_number(start_block.number()).await?;
+            transfer_store.get_transfers_from_block_number(start_block.number()).await?;
 
         assert_eq!(collected_transfers_after_restart.len(), 3);
         for transfer in &collected_transfers_after_restart {

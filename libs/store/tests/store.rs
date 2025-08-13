@@ -2,13 +2,15 @@
 mod tests {
     use alloy::primitives::B256;
     use eyre::Result;
-    use store::{client::Client, model::Checkpoint, store::Store};
+    use store::{
+        checkpoint::model::Checkpoint, checkpoint::store::Store as CheckpointStore, client::Client,
+    };
 
     #[tokio::test]
     async fn test_insert_and_get_last_checkpoint() -> Result<()> {
         let db_url = "sqlite::memory:";
         let client = Client::init(db_url).await?;
-        let store = Store::new(client);
+        let store = CheckpointStore::new(client);
 
         let checkpoint_1 = Checkpoint {
             block_number: 12345,

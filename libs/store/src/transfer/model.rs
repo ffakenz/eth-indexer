@@ -11,10 +11,3 @@ pub struct Transfer {
     pub to_address: Vec<u8>,
     pub amount: Vec<u8>,
 }
-
-#[derive(Clone, FromRow, PartialEq)]
-pub struct Checkpoint {
-    pub block_number: i64,
-    pub block_hash: Vec<u8>,
-    pub parent_hash: Vec<u8>,
-}

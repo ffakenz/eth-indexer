@@ -1,6 +1,7 @@
 use eyre::Result;
 use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
 
+#[derive(Clone)]
 pub struct Client {
     pool: SqlitePool,
 }
