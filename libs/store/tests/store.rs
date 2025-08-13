@@ -17,14 +17,14 @@ mod tests {
             block_hash: B256::repeat_byte(0xAB).to_vec(),
             parent_hash: B256::repeat_byte(0xBA).to_vec(),
         };
-        store.insert_checkpoint(checkpoint_1.clone()).await?;
+        store.insert_checkpoint(&checkpoint_1).await?;
 
         let checkpoint_2 = Checkpoint {
             block_number: 12346,
             block_hash: B256::repeat_byte(0xCD).to_vec(),
             parent_hash: B256::repeat_byte(0xDC).to_vec(),
         };
-        store.insert_checkpoint(checkpoint_2.clone()).await?;
+        store.insert_checkpoint(&checkpoint_2).await?;
 
         let last_checkpoint = store.get_last_checkpoint().await?;
 

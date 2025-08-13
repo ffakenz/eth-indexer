@@ -1,5 +1,8 @@
 use crate::args::Args;
+use crate::gapfiller;
 use crate::processor::handle::Processor;
+use crate::pubsub::event::Event;
+use crate::pubsub::{publisher, subscriber};
 use alloy::rpc::types::Log;
 use chain::rpc::NodeClient;
 use eyre::Result;
@@ -21,9 +24,9 @@ impl Engine {
         checkpoint_store: Arc<CheckpointStore>,
         processor: Arc<dyn Processor<Log, T>>,
     ) -> Result<Engine> {
-        // 1. Run backfill synchronously, collect logs gap-fill
+        // Run collect logs gap-fill synchronously
 
-        let checkpoint = crate::utils::chunked_backfill(
+        let checkpoint = gapfiller::chunked_backfill(
             args,
             node_client,
             Arc::clone(&checkpoint_store),
@@ -31,31 +34,34 @@ impl Engine {
         )
         .await?;
 
-        // 2. Run watch asynchronously, collect logs live
+        // Run collect logs live asynchronously
 
-        // Channel for passing logs from producer to consumer
-        let (tx, rx) = mpsc::channel::<Result<Log>>(100);
+        let (tx, rx) = mpsc::channel::<Result<Event>>(100);
 
-        // Broadcast channel for shutdown signal
         let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
-        // -- Spawn Consumer --
-        let consumer_handle = crate::utils::spawn_consumer(
+        let consumer_handle = subscriber::spawn_event_consumer(
             rx,
             shutdown_tx.clone(),
-            node_client,
             Arc::clone(&checkpoint_store),
             Arc::clone(&processor),
         )
         .await;
 
-        // -- Spawn Producer --
+        // Watching logs poller
         let next_checkpoint_number = (checkpoint.block_number + 1) as u64;
         let shared_logs_stream =
-            crate::utils::watch_logs_stream(args, node_client, next_checkpoint_number).await?;
-        let producer_handle =
-            crate::utils::spawn_producer(tx, shutdown_tx.clone(), Arc::clone(&shared_logs_stream))
-                .await;
+            publisher::watch_logs_stream(args, node_client, next_checkpoint_number).await?;
+
+        let producer_handle = publisher::spawn_event_producer(
+            tx,
+            shutdown_tx.clone(),
+            args.checkpoint_interval,
+            next_checkpoint_number,
+            Arc::new(node_client.clone()),
+            shared_logs_stream,
+        )
+        .await;
 
         Ok(Self { shutdown_tx, consumer_handle, producer_handle })
     }

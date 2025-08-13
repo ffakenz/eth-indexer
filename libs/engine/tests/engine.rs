@@ -99,6 +99,7 @@ mod tests {
             event: "Transfer(address,address,uint256)".to_string(),
             from_block: start_block_hash,
             backfill_chunk_size: 1000,
+            checkpoint_interval: 1,
             poll_interval: Duration::from_millis(100),
         };
         let engine = Engine::start(
@@ -152,6 +153,7 @@ mod tests {
             event: "Transfer(address,address,uint256)".to_string(),
             from_block: BlockHash::from_slice(&latest_checkpoint.block_hash),
             backfill_chunk_size: 1000,
+            checkpoint_interval: 1,
             poll_interval: Duration::from_millis(100),
         };
         let restarted_engine = Engine::start(

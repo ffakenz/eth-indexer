@@ -17,7 +17,7 @@ impl Store {
     // CHECKPOINTS
     // ---------------------------
 
-    pub async fn insert_checkpoint(&self, checkpoint: Checkpoint) -> Result<(), Error> {
+    pub async fn insert_checkpoint(&self, checkpoint: &Checkpoint) -> Result<(), Error> {
         let query = r#"
             INSERT INTO checkpoints (block_number, block_hash, parent_hash)
             VALUES (?, ?, ?)
