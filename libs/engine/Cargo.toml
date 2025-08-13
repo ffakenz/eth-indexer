@@ -17,3 +17,4 @@ eyre = "0.6.12"
 futures-util = "0.3.31"
 tokio = { version = "1.47.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 sqlx = "0.8.6"
+async-trait = "0.1.88"

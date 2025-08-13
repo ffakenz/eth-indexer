@@ -1,10 +1,10 @@
 use crate::args::Args;
+use crate::processor::Processor;
 use alloy::rpc::types::Log;
 use chain::rpc::NodeClient;
 use eyre::Result;
 use std::sync::Arc;
 use store::checkpoint::store::Store as CheckpointStore;
-use store::transfer::store::Store as TransferStore;
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
 
@@ -15,11 +15,11 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub async fn start(
+    pub async fn start<T: Send + Sync + 'static>(
         args: &Args,
         node_client: &NodeClient,
         checkpoint_store: Arc<CheckpointStore>,
-        transfer_store: Arc<TransferStore>,
+        processor: Arc<dyn Processor<T>>,
     ) -> Result<Engine> {
         // 1. Run backfill synchronously, collect logs gap-fill
 
@@ -27,7 +27,7 @@ impl Engine {
             args,
             node_client,
             Arc::clone(&checkpoint_store),
-            Arc::clone(&transfer_store),
+            Arc::clone(&processor),
         )
         .await?;
 
@@ -45,7 +45,7 @@ impl Engine {
             shutdown_tx.clone(),
             node_client,
             Arc::clone(&checkpoint_store),
-            Arc::clone(&transfer_store),
+            Arc::clone(&processor),
         )
         .await;
 

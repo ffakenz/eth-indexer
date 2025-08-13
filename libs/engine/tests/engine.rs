@@ -2,9 +2,11 @@
 mod tests {
     use alloy::primitives::BlockHash;
     use engine::engine::Engine;
+    use engine::processor::{Processor, TransferProcessor};
     use eyre::Result;
     use store::checkpoint::store::Store as CheckpointStore;
     use store::client::Client;
+    use store::transfer::model::Transfer;
     use store::transfer::store::Store as TransferStore;
 
     use std::sync::Arc;
@@ -33,7 +35,9 @@ mod tests {
         let db_url = "sqlite::memory:";
         let client = Client::init(db_url).await?;
         let checkpoint_store = Arc::new(CheckpointStore::new(client.clone()));
-        let transfer_store = Arc::new(TransferStore::new(client.clone()));
+        let transfer_store = TransferStore::new(client.clone());
+        let transfer_processor: Arc<dyn Processor<Option<Transfer>>> =
+            Arc::new(TransferProcessor { store: TransferStore::new(client.clone()) });
 
         // Spin up a local Anvil node.
         // Ensure `anvil` is available in $PATH.
@@ -100,7 +104,7 @@ mod tests {
             &args,
             &node_client,
             Arc::clone(&checkpoint_store),
-            Arc::clone(&transfer_store),
+            Arc::clone(&transfer_processor),
         )
         .await?;
 
@@ -153,7 +157,7 @@ mod tests {
             &args,
             &node_client,
             Arc::clone(&checkpoint_store),
-            Arc::clone(&transfer_store),
+            Arc::clone(&transfer_processor),
         )
         .await?;
 
