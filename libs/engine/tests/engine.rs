@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use alloy::primitives::BlockHash;
     use engine::engine::Engine;
     use eyre::Result;
     use store::{client::Client, store::Store};
@@ -103,8 +104,8 @@ mod tests {
 
         // Let the engine run for a few iterations
         tokio::time::sleep(Duration::from_secs(3)).await;
-
         let latest_block = node_client.get_latest_block().await?.unwrap();
+
         let collected_transfers = store
             .get_transfers_between_block_numbers(start_block.number(), latest_block.number())
             .await?;
@@ -131,6 +132,14 @@ mod tests {
         println!("✅ Transfer event and balances verified");
 
         // Re-start the engine
+        let latest_checkpoint = store.get_last_checkpoint().await?.unwrap();
+        let args = engine::args::Args {
+            address: *contract.address(),
+            event: "Transfer(address,address,uint256)".to_string(),
+            from_block: BlockHash::from_slice(&latest_checkpoint.block_hash),
+            backfill_chunk_size: 1000,
+            poll_interval: Duration::from_millis(100),
+        };
         let restarted_engine = Engine::start(&args, &node_client, Arc::clone(&store)).await?;
 
         // Let the engine run for a few iterations

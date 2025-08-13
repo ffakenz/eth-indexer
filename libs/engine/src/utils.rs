@@ -80,21 +80,55 @@ pub async fn chunked_backfill(
             }
         }
 
+        match save_checkpoint(to_block_number_chunk, node_client, &store).await {
+            Ok(success) => success,
+            Err(e) => {
+                eprintln!("Consumer Failed: {e:?}");
+                return Err(eyre!(e));
+            }
+        }
+
         checkpoint_number = to_block_number_chunk + 1;
     }
 
     Ok(final_checkpoint)
 }
 
+pub async fn save_checkpoint(
+    block_number: BlockNumber,
+    node_client: &NodeClient,
+    store: &Store,
+) -> Result<()> {
+    // Fetch latest processed block to build checkpoint
+    let block = node_client
+        .get_block_by_number(block_number)
+        .await?
+        .ok_or_else(|| eyre!("Block not found for checkpoint: {}", block_number))?;
+
+    let checkpoint = Checkpoint {
+        block_number: block_number as i64,
+        block_hash: block.hash().to_vec(),
+        parent_hash: block.header.parent_hash.to_vec(),
+    };
+
+    store.insert_checkpoint(checkpoint).await?;
+    println!("Checkpoint saved at block number {block_number:?} and hash {}", block.hash());
+    Ok(())
+}
+
 pub async fn spawn_consumer(
     rx: mpsc::Receiver<Result<Transfer, Report>>,
     shutdown_tx: broadcast::Sender<()>,
+    node_client: &NodeClient,
     store: Arc<Store>,
 ) -> tokio::task::JoinHandle<()> {
     // A closure that returns a future.
+    let node_client_cloned = node_client.clone();
     let shutdown_tx_cloned = shutdown_tx.clone();
+    // let node_client_cloned = node_client.clone();
     let consumer_callback = move |consumed_transfer: Result<Transfer>| {
-        let store_for_consumer = Arc::clone(&store);
+        let store_for_consumer: Arc<Store> = Arc::clone(&store);
+        let node_client_for_consumer = node_client_cloned.clone();
         let shutdown_tx_for_consumerr = shutdown_tx_cloned.clone();
         async move {
             match &consumed_transfer {
@@ -104,7 +138,23 @@ pub async fn spawn_consumer(
                     let _ = shutdown_tx_for_consumerr.send(());
                 }
                 Ok(transfer) => match store_for_consumer.insert_transfer(transfer).await {
-                    Ok(_) => println!("Consumed: {transfer:?}"),
+                    Ok(_) => {
+                        println!("Consumed: {transfer:?}");
+                        match save_checkpoint(
+                            transfer.block_number as u64,
+                            &node_client_for_consumer,
+                            &store_for_consumer,
+                        )
+                        .await
+                        {
+                            Ok(success) => success,
+                            Err(e) => {
+                                eprintln!("Consumer Failed: {e:?}");
+                                // stop signal
+                                let _ = shutdown_tx_for_consumerr.send(());
+                            }
+                        }
+                    }
                     Err(e) => {
                         if let Error::Database(db_err) = &e {
                             if db_err.message().contains("UNIQUE constraint failed: transfers.transaction_hash, transfers.log_index") {

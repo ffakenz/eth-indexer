@@ -30,7 +30,8 @@ impl Engine {
 
         // -- Spawn Consumer --
         let consumer_handle =
-            crate::utils::spawn_consumer(rx, shutdown_tx.clone(), Arc::clone(&store)).await;
+            crate::utils::spawn_consumer(rx, shutdown_tx.clone(), node_client, Arc::clone(&store))
+                .await;
 
         // -- Spawn Producer --
         let next_checkpoint_number = (checkpoint.block_number + 1) as u64;

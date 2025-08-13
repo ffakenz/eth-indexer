@@ -28,8 +28,8 @@ impl Store {
 
         sqlx::query(query)
             .bind(log.block_number)
-            .bind(&log.block_hash[..])
-            .bind(&log.transaction_hash[..])
+            .bind(&log.block_hash)
+            .bind(&log.transaction_hash)
             .bind(log.log_index)
             .bind(&log.contract_address)
             .bind(&log.from_address)
@@ -86,20 +86,15 @@ impl Store {
     // CHECKPOINTS
     // ---------------------------
 
-    pub async fn insert_checkpoint(
-        &self,
-        block_number: BlockNumber,
-        block_hash: BlockHash,
-        parent_hash: BlockHash,
-    ) -> Result<(), Error> {
+    pub async fn insert_checkpoint(&self, checkpoint: Checkpoint) -> Result<(), Error> {
         let query = r#"
             INSERT INTO checkpoints (block_number, block_hash, parent_hash)
             VALUES (?, ?, ?)
             "#;
         sqlx::query(query)
-            .bind(block_number as i64)
-            .bind(&block_hash[..])
-            .bind(&parent_hash[..])
+            .bind(checkpoint.block_number)
+            .bind(&checkpoint.block_hash)
+            .bind(&checkpoint.parent_hash)
             .execute(self.client.pool())
             .await?;
         Ok(())
