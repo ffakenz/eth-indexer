@@ -111,7 +111,6 @@ pub async fn spawn_consumer<T: Send + Sync + 'static>(
     // A closure that returns a future.
     let node_client_cloned = node_client.clone();
     let shutdown_tx_cloned = shutdown_tx.clone();
-    // let node_client_cloned = node_client.clone();
     let consumer_callback = move |consumed_log: Result<Log>| {
         let checkpoint_store_for_consumer: Arc<CheckpointStore> = Arc::clone(&checkpoint_store);
         let processor_for_consumer: Arc<dyn Processor<T>> = Arc::clone(&processor);

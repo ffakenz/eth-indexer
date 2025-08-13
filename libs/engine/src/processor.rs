@@ -16,7 +16,7 @@ pub struct TransferProcessor {
 impl Processor<Option<Transfer>> for TransferProcessor {
     async fn process_log(&self, log: &Log) -> Result<Option<Transfer>> {
         let transfer: Transfer = log.try_into()?;
-        match self.store.insert_transfer(&transfer.clone()).await {
+        match self.store.insert_transfer(&transfer).await {
             Ok(_) => {
                 println!("Processed: {transfer:?}");
                 Ok(Some(transfer))
