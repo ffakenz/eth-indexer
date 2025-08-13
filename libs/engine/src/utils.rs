@@ -120,7 +120,7 @@ pub async fn save_checkpoint(
 }
 
 pub async fn spawn_consumer(
-    rx: mpsc::Receiver<Result<Transfer, Report>>,
+    rx: mpsc::Receiver<Result<Log, Report>>,
     shutdown_tx: broadcast::Sender<()>,
     node_client: &NodeClient,
     checkpoint_store: Arc<CheckpointStore>,
@@ -130,7 +130,7 @@ pub async fn spawn_consumer(
     let node_client_cloned = node_client.clone();
     let shutdown_tx_cloned = shutdown_tx.clone();
     // let node_client_cloned = node_client.clone();
-    let consumer_callback = move |consumed_transfer: Result<Transfer>| {
+    let consumer_callback = move |consumed_transfer: Result<Log>| {
         let checkpoint_store_for_consumer: Arc<CheckpointStore> = Arc::clone(&checkpoint_store);
         let transfer_store_for_consumer: Arc<TransferStore> = Arc::clone(&transfer_store);
         let node_client_for_consumer = node_client_cloned.clone();
@@ -142,7 +142,8 @@ pub async fn spawn_consumer(
                     // stop signal
                     let _ = shutdown_tx_for_consumerr.send(());
                 }
-                Ok(transfer) => {
+                Ok(log) => {
+                    let transfer = &log.try_into().unwrap();
                     match transfer_store_for_consumer.insert_transfer(transfer).await {
                         Ok(_) => {
                             println!("Consumed: {transfer:?}");
@@ -186,7 +187,7 @@ pub async fn spawn_consumer(
         }
     };
 
-    // Spawn consumer: consumes transfers from rx (producer)
+    // Spawn consumer: consumes logs from rx (producer)
     Consumer::spawn(rx, shutdown_tx.clone(), consumer_callback)
 }
 
@@ -209,7 +210,7 @@ pub async fn watch_logs_stream(
 }
 
 pub async fn spawn_producer(
-    tx: mpsc::Sender<Result<Transfer, Report>>,
+    tx: mpsc::Sender<Result<Log, Report>>,
     shutdown_tx: broadcast::Sender<()>,
     shared_logs_stream: Arc<Mutex<Pin<Box<impl Stream<Item = Log> + Send + 'static>>>>,
 ) -> tokio::task::JoinHandle<()> {
@@ -218,10 +219,10 @@ pub async fn spawn_producer(
         let logs_stream_for_producer = Arc::clone(&shared_logs_stream);
         async move {
             let mut locked_stream = logs_stream_for_producer.lock().await;
-            match &locked_stream.next().await {
+            match locked_stream.next().await {
                 Some(log) => {
                     drop(locked_stream);
-                    log.try_into()
+                    Ok(log)
                 }
                 None => {
                     drop(locked_stream);
@@ -231,6 +232,6 @@ pub async fn spawn_producer(
         }
     };
 
-    // Spawn producer: produces transfers received from logs stream and sends them to tx (consumer)
+    // Spawn producer: produces received from logs stream and sends them to tx (consumer)
     Producer::spawn(tx, shutdown_tx, producer_callback)
 }

@@ -1,9 +1,9 @@
 use crate::args::Args;
+use alloy::rpc::types::Log;
 use chain::rpc::NodeClient;
 use eyre::Result;
 use std::sync::Arc;
 use store::checkpoint::store::Store as CheckpointStore;
-use store::transfer::model::Transfer;
 use store::transfer::store::Store as TransferStore;
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
@@ -33,8 +33,8 @@ impl Engine {
 
         // 2. Run watch asynchronously, collect logs live
 
-        // Channel for passing transfers from producer to consumer
-        let (tx, rx) = mpsc::channel::<Result<Transfer>>(100);
+        // Channel for passing logs from producer to consumer
+        let (tx, rx) = mpsc::channel::<Result<Log>>(100);
 
         // Broadcast channel for shutdown signal
         let (shutdown_tx, _) = broadcast::channel::<()>(1);
