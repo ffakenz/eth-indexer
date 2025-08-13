@@ -1,10 +1,13 @@
 use crate::args::Args;
+use alloy::hex;
 use alloy::primitives::{BlockHash, BlockNumber};
 use alloy::rpc::types::{Block, Log};
 use chain::rpc::NodeClient;
+use eyre::eyre;
 use eyre::{Report, Result};
 use futures_util::stream::{self};
 use futures_util::{Stream, StreamExt};
+use sqlx::Error;
 use std::convert::TryInto;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -58,8 +61,23 @@ pub async fn chunked_backfill(
 
         for log in &logs {
             let transfer: Transfer = log.try_into()?;
-            println!("Consumed: {transfer:?}");
-            store.insert_transfer(&transfer).await?;
+            match store.insert_transfer(&transfer).await {
+                Ok(_) => println!("Consumed: {transfer:?}"),
+                Err(e) => {
+                    if let Error::Database(db_err) = &e {
+                        if db_err.message().contains("UNIQUE constraint failed: transfers.transaction_hash, transfers.log_index") {
+                            println!(
+                                "Duplicate transfer ignored: tx_hash={}, log_index={}",
+                                hex::encode(&transfer.transaction_hash),
+                                transfer.log_index
+                            );
+                            continue
+                        }
+                    }
+                    // Other unexpected non-database error (e.g. connection issue)
+                    return Err(eyre!(e));
+                }
+            }
         }
 
         checkpoint_number = to_block_number_chunk + 1;
@@ -74,14 +92,38 @@ pub async fn spawn_consumer(
     store: Arc<Store>,
 ) -> tokio::task::JoinHandle<()> {
     // A closure that returns a future.
+    let shutdown_tx_cloned = shutdown_tx.clone();
     let consumer_callback = move |consumed_transfer: Result<Transfer>| {
         let store_for_consumer = Arc::clone(&store);
+        let shutdown_tx_for_consumerr = shutdown_tx_cloned.clone();
         async move {
             match &consumed_transfer {
-                Err(e) => eprintln!("Consumer Failed: {e:?}"),
+                Err(e) => {
+                    eprintln!("Consumer Failed: {e:?}");
+                    // stop signal
+                    let _ = shutdown_tx_for_consumerr.send(());
+                }
                 Ok(transfer) => match store_for_consumer.insert_transfer(transfer).await {
-                    Err(e) => eprintln!("Consumer Failed: {e:?} |> {transfer:?}"),
                     Ok(_) => println!("Consumed: {transfer:?}"),
+                    Err(e) => {
+                        if let Error::Database(db_err) = &e {
+                            if db_err.message().contains("UNIQUE constraint failed: transfers.transaction_hash, transfers.log_index") {
+                                println!(
+                                    "Duplicate transfer ignored: tx_hash={}, log_index={}",
+                                    hex::encode(&transfer.transaction_hash),
+                                    transfer.log_index
+                                );
+                            } else {
+                                eprintln!("Consumer Failed: {e:?}");
+                                // stop signal
+                                let _ = shutdown_tx_for_consumerr.send(());
+                            }
+                        } else {
+                            eprintln!("Consumer Fatal Error: {e:?}");
+                            // stop signal
+                            let _ = shutdown_tx_for_consumerr.send(());
+                        }
+                    }
                 },
             }
         }

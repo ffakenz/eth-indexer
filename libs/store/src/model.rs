@@ -1,6 +1,6 @@
 use sqlx::FromRow;
 
-#[derive(Clone, FromRow)]
+#[derive(Clone, FromRow, PartialEq, PartialOrd)]
 pub struct Transfer {
     pub block_number: i64,
     pub block_hash: Vec<u8>,

@@ -2,6 +2,7 @@ use crate::client::Client;
 use crate::model::{Checkpoint, Transfer};
 use alloy::primitives::{BlockHash, BlockNumber};
 use eyre::Result;
+use sqlx::Error;
 
 pub struct Store {
     client: Client,
@@ -16,7 +17,7 @@ impl Store {
     // TRANSFER LOGS
     // ---------------------------
 
-    pub async fn insert_transfer(&self, log: &Transfer) -> Result<()> {
+    pub async fn insert_transfer(&self, log: &Transfer) -> Result<(), Error> {
         let query = r#"
             INSERT INTO transfers (
                 block_number, block_hash, transaction_hash, log_index,
@@ -42,7 +43,7 @@ impl Store {
     pub async fn get_transfers_from_block_number(
         &self,
         from_block_number: BlockNumber,
-    ) -> Result<Vec<Transfer>> {
+    ) -> Result<Vec<Transfer>, Error> {
         let query = r#"
             SELECT
                 block_number, block_hash, transaction_hash, log_index,
@@ -63,7 +64,7 @@ impl Store {
         &self,
         from_block: BlockNumber,
         to_block: BlockNumber,
-    ) -> Result<Vec<Transfer>> {
+    ) -> Result<Vec<Transfer>, Error> {
         let query = r#"
             SELECT
                 block_number, block_hash, transaction_hash, log_index,
@@ -90,7 +91,7 @@ impl Store {
         block_number: BlockNumber,
         block_hash: BlockHash,
         parent_hash: BlockHash,
-    ) -> Result<()> {
+    ) -> Result<(), Error> {
         let query = r#"
             INSERT INTO checkpoints (block_number, block_hash, parent_hash)
             VALUES (?, ?, ?)
@@ -104,7 +105,7 @@ impl Store {
         Ok(())
     }
 
-    pub async fn get_last_checkpoint(&self) -> Result<Option<Checkpoint>> {
+    pub async fn get_last_checkpoint(&self) -> Result<Option<Checkpoint>, Error> {
         let query = r#"
             SELECT block_number, block_hash, parent_hash
             FROM checkpoints
@@ -119,7 +120,7 @@ impl Store {
     pub async fn get_checkpoint_by_number(
         &self,
         block_number: BlockNumber,
-    ) -> Result<Option<Checkpoint>> {
+    ) -> Result<Option<Checkpoint>, Error> {
         let query = r#"
             SELECT block_number, block_hash, parent_hash
             FROM checkpoints
@@ -137,7 +138,7 @@ impl Store {
     pub async fn get_checkpoint_by_hash(
         &self,
         block_hash: BlockHash,
-    ) -> Result<Option<Checkpoint>> {
+    ) -> Result<Option<Checkpoint>, Error> {
         let query = r#"
             SELECT block_number, block_hash, parent_hash
             FROM checkpoints

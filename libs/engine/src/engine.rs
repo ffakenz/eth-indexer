@@ -14,11 +14,11 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub async fn start(args: Args, node_client: &NodeClient, store: Arc<Store>) -> Result<Engine> {
+    pub async fn start(args: &Args, node_client: &NodeClient, store: Arc<Store>) -> Result<Engine> {
         // 1. Run backfill synchronously, collect logs gap-fill
 
         let checkpoint =
-            crate::utils::chunked_backfill(&args, node_client, Arc::clone(&store)).await?;
+            crate::utils::chunked_backfill(args, node_client, Arc::clone(&store)).await?;
 
         // 2. Run watch asynchronously, collect logs live
 
@@ -35,7 +35,7 @@ impl Engine {
         // -- Spawn Producer --
         let next_checkpoint_number = (checkpoint.block_number + 1) as u64;
         let shared_logs_stream =
-            crate::utils::watch_logs_stream(&args, node_client, next_checkpoint_number).await?;
+            crate::utils::watch_logs_stream(args, node_client, next_checkpoint_number).await?;
         let producer_handle =
             crate::utils::spawn_producer(tx, shutdown_tx.clone(), Arc::clone(&shared_logs_stream))
                 .await;

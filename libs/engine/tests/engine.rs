@@ -92,7 +92,7 @@ mod tests {
             backfill_chunk_size: 1000,
             poll_interval: Duration::from_millis(100),
         };
-        let engine = Engine::start(args, &node_client, Arc::clone(&store)).await?;
+        let engine = Engine::start(&args, &node_client, Arc::clone(&store)).await?;
 
         // Send transfer 2 from Alice -> Bob (after engine startup)
         let amount_2 = U256::from(100);
@@ -129,6 +129,27 @@ mod tests {
         assert_eq!(bob_after - bob_before, amount_1 + amount_2);
 
         println!("✅ Transfer event and balances verified");
+
+        // Re-start the engine
+        let restarted_engine = Engine::start(&args, &node_client, Arc::clone(&store)).await?;
+
+        // Let the engine run for a few iterations
+        tokio::time::sleep(Duration::from_secs(3)).await;
+
+        // Stop the engine
+        restarted_engine.shutdown().await;
+
+        // Check collected results
+        let collected_transfers_after_restart =
+            store.get_transfers_from_block_number(start_block.number()).await?;
+
+        assert_eq!(collected_transfers_after_restart.len(), 3);
+        for transfer in &collected_transfers_after_restart {
+            println!("Collected: {transfer:?}");
+        }
+
+        assert_eq!(collected_transfers, collected_transfers_after_restart);
+
         Ok(())
     }
 }
