@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use alloy::primitives::BlockHash;
+    use alloy::rpc::types::ValueOrArray;
     use engine::engine::Engine;
     use engine::processor::{Processor, TransferProcessor};
     use eyre::Result;
@@ -94,7 +95,7 @@ mod tests {
 
         // Start the engine
         let args = engine::args::Args {
-            address: *contract.address(),
+            addresses: ValueOrArray::Value(*contract.address()),
             event: "Transfer(address,address,uint256)".to_string(),
             from_block: start_block_hash,
             backfill_chunk_size: 1000,
@@ -147,7 +148,7 @@ mod tests {
         // Re-start the engine
         let latest_checkpoint = checkpoint_store.get_last_checkpoint().await?.unwrap();
         let args = engine::args::Args {
-            address: *contract.address(),
+            addresses: ValueOrArray::Value(*contract.address()),
             event: "Transfer(address,address,uint256)".to_string(),
             from_block: BlockHash::from_slice(&latest_checkpoint.block_hash),
             backfill_chunk_size: 1000,

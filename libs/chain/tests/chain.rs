@@ -8,6 +8,7 @@ mod tests {
         eips::BlockNumberOrTag,
         node_bindings::Anvil,
         primitives::{Address, TxHash, U256},
+        rpc::types::ValueOrArray,
         signers::local::PrivateKeySigner,
         sol,
     };
@@ -74,7 +75,7 @@ mod tests {
         // Poll for transfer previous event logs
         let mut previous_events_logs_stream = node_client
             .watch_logs(
-                contract.address(),
+                ValueOrArray::Value(*contract.address()),
                 "Transfer(address,address,uint256)",
                 BlockNumberOrTag::Number(latest_block),
                 Duration::from_millis(100),
@@ -100,7 +101,7 @@ mod tests {
         // Poll for transfer previou event logs
         let mut previous_event_logs_stream = node_client
             .watch_logs(
-                contract.address(),
+                ValueOrArray::Value(*contract.address()),
                 "Transfer(address,address,uint256)",
                 BlockNumberOrTag::Latest,
                 Duration::from_millis(100),

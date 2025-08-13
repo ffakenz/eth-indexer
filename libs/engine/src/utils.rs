@@ -51,7 +51,7 @@ pub async fn chunked_backfill<T>(
 
         let logs: Vec<Log> = node_client
             .get_logs(
-                &args.address,
+                args.addresses.clone(),
                 &args.event,
                 checkpoint_number.into(),
                 to_block_number_chunk.into(),
@@ -163,7 +163,12 @@ pub async fn watch_logs_stream(
     checkpoint_number: BlockNumber,
 ) -> Result<Arc<Mutex<Pin<Box<impl Stream<Item = Log> + Send + 'static>>>>> {
     let logs_stream = node_client
-        .watch_logs(&args.address, &args.event, checkpoint_number.into(), args.poll_interval)
+        .watch_logs(
+            args.addresses.clone(),
+            &args.event,
+            checkpoint_number.into(),
+            args.poll_interval,
+        )
         .await?
         .flat_map(stream::iter);
 

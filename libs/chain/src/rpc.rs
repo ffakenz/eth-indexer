@@ -16,6 +16,7 @@ use alloy::rpc::client::RpcClient;
 use alloy::rpc::types::Block;
 use alloy::rpc::types::Filter;
 use alloy::rpc::types::Log;
+use alloy::rpc::types::ValueOrArray;
 use alloy::signers::local::PrivateKeySigner;
 use alloy::transports::RpcError;
 use alloy::transports::TransportErrorKind;
@@ -72,13 +73,13 @@ impl NodeClient {
 
     pub async fn get_logs(
         &self,
-        address: &Address,
+        addresses: ValueOrArray<Address>,
         event: &str,
         from_block_number: BlockNumberOrTag,
         to_block_number: BlockNumberOrTag,
     ) -> Result<Vec<Log>, RpcError<TransportErrorKind>> {
         let filter = Filter::new()
-            .address(*address)
+            .address(addresses)
             .event(event)
             .from_block(from_block_number)
             .to_block(to_block_number);
@@ -88,12 +89,12 @@ impl NodeClient {
 
     pub async fn watch_logs(
         &self,
-        address: &Address,
+        addresses: ValueOrArray<Address>,
         event: &str,
         from_block_number: BlockNumberOrTag,
         poll_interval: Duration,
     ) -> Result<PollerStream<Vec<Log>>, RpcError<TransportErrorKind>> {
-        let filter = Filter::new().address(*address).event(event).from_block(from_block_number);
+        let filter = Filter::new().address(addresses).event(event).from_block(from_block_number);
 
         self.provider
             .watch_logs(&filter)
