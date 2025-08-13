@@ -56,7 +56,14 @@ pub async fn chunked_backfill<T>(
                 checkpoint_number.into(),
                 to_block_number_chunk.into(),
             )
-            .await?;
+            .await?
+            .into_iter()
+            // NOTE: Logs may come from pending txs that have not yet been mined.
+            // Pending logs are re-emitted (with the same tx hash and log index)
+            // once their tx is included in a block, at which point `block_number` will be set.
+            // We skip them (ignore) here to process only confirmed logs in backfill mode.
+            .filter(|log| log.block_number.is_some())
+            .collect();
 
         for log in &logs {
             match processor.process_log(log).await {
@@ -125,26 +132,35 @@ pub async fn spawn_consumer<T: Send + Sync + 'static>(
                 }
                 Ok(log) => {
                     println!("Consumer consumed: {log:?}");
-                    match processor_for_consumer.process_log(log).await {
-                        Ok(_) => (),
-                        Err(_) => {
-                            // stop signal
-                            let _ = shutdown_tx_for_consumerr.send(());
-                        }
-                    };
-                    match save_checkpoint(
-                        // FIXME! handle unwrap error
-                        log.block_number.unwrap(),
-                        &node_client_for_consumer,
-                        &checkpoint_store_for_consumer,
-                    )
-                    .await
-                    {
-                        Ok(success) => success,
-                        Err(e) => {
-                            eprintln!("Consumer failed on [save_checkpoint]: {e:?}");
-                            // stop signal
-                            let _ = shutdown_tx_for_consumerr.send(());
+                    match log.block_number {
+                        // NOTE: This log comes from a pending tx that has not yet been mined.
+                        // Pending logs are re-emitted (with the same tx hash and log index)
+                        // once the tx is included in a block, at which point `block_number` will be set.
+                        // We skip it (ignore) now and process it only after confirmation.
+                        None => (),
+                        // the tx that emitted this log has been mined into a block
+                        Some(block_number) => {
+                            match processor_for_consumer.process_log(log).await {
+                                Ok(_) => (),
+                                Err(_) => {
+                                    // stop signal
+                                    let _ = shutdown_tx_for_consumerr.send(());
+                                }
+                            };
+                            match save_checkpoint(
+                                block_number,
+                                &node_client_for_consumer,
+                                &checkpoint_store_for_consumer,
+                            )
+                            .await
+                            {
+                                Ok(success) => success,
+                                Err(e) => {
+                                    eprintln!("Consumer failed on [save_checkpoint]: {e:?}");
+                                    // stop signal
+                                    let _ = shutdown_tx_for_consumerr.send(());
+                                }
+                            }
                         }
                     }
                 }
