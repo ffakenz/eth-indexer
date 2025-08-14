@@ -98,7 +98,7 @@ mod tests {
             addresses: ValueOrArray::Value(*contract.address()),
             event: "Transfer(address,address,uint256)".to_string(),
             from_block: start_block_hash,
-            backfill_chunk_size: 1000,
+            backfill_chunk_size: 2,
             checkpoint_interval: 1,
             poll_interval: Duration::from_millis(100),
         };
@@ -152,7 +152,7 @@ mod tests {
             addresses: ValueOrArray::Value(*contract.address()),
             event: "Transfer(address,address,uint256)".to_string(),
             from_block: BlockHash::from_slice(&latest_checkpoint.block_hash),
-            backfill_chunk_size: 1000,
+            backfill_chunk_size: 2,
             checkpoint_interval: 1,
             poll_interval: Duration::from_millis(100),
         };

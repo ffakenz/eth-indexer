@@ -46,8 +46,6 @@ pub async fn spawn_event_producer(
     args: &Args,
     tx: mpsc::Sender<Result<Event, Report>>,
     shutdown_tx: broadcast::Sender<()>,
-    // positive number: N logs between checkpoints
-    checkpoint_interval: u64,
     next_checkpoint_block_number: u64,
     node_client: Arc<NodeClient>,
 ) -> Result<tokio::task::JoinHandle<()>> {
@@ -68,12 +66,13 @@ pub async fn spawn_event_producer(
     let state =
         Arc::new(Mutex::new(ProducerState { event_counter: 0, next_checkpoint_block_number }));
 
+    let checkpoint_interval = args.checkpoint_interval;
+
     // A closure that returns a future
     let producer_callback = move || {
         let logs_stream_for_producer = Arc::clone(&shared_logs_stream);
         let node_client_for_producer = Arc::clone(&node_client);
         let state_for_producer = Arc::clone(&state);
-
         async move {
             let (do_checkpoint, checkpoint_block_number) =
                 state_for_producer.lock().await.checkpoint_decision(checkpoint_interval);

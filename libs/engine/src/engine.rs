@@ -24,7 +24,7 @@ impl Engine {
         checkpoint_store: Arc<CheckpointStore>,
         processor: Arc<dyn Processor<Log, T>>,
     ) -> Result<Engine> {
-        // Run collect logs gap-fill synchronously
+        // Run collect logs gap-fill sync
 
         let checkpoint = gapfiller::chunked_backfill(
             args,
@@ -34,7 +34,7 @@ impl Engine {
         )
         .await?;
 
-        // Run collect logs live asynchronously
+        // Run collect logs live async
 
         let (tx, rx) = mpsc::channel::<Result<Event>>(100);
 
@@ -52,7 +52,6 @@ impl Engine {
             args,
             tx,
             shutdown_tx.clone(),
-            args.checkpoint_interval,
             (checkpoint.block_number + 1) as u64,
             Arc::new(node_client.clone()),
         )
@@ -63,10 +62,7 @@ impl Engine {
 
     // Send shutdown signal and wait for both producer and consumer to finish
     pub async fn shutdown(self) {
-        // Send shutdown signal
         let _ = self.shutdown_tx.send(());
-
-        // Await tasks
         let _ = self.producer_handle.await;
         let _ = self.consumer_handle.await;
     }
