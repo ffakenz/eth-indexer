@@ -1,10 +1,11 @@
 use crate::args::Args;
 use crate::pubsub::event::Event;
+use crate::source::handle::{Source, SourceInput, StreamFilter};
 use chain::rpc::NodeClient;
 use eyre::eyre;
 use eyre::{Report, Result};
 use futures_util::StreamExt;
-use futures_util::stream::{self};
+use std::fmt;
 use std::sync::Arc;
 use sync::producer::Producer;
 use tokio::sync::{Mutex, broadcast, mpsc};
@@ -42,27 +43,29 @@ async fn with_state<S, R>(state: &Arc<Mutex<S>>, f: impl FnOnce(&mut S) -> R) ->
     f(&mut locked)
 }
 
-pub async fn spawn_event_producer(
+pub async fn spawn_event_producer<E, T>(
     args: &Args,
-    tx: mpsc::Sender<Result<Event, Report>>,
+    tx: mpsc::Sender<Result<Event<E>, Report>>,
     shutdown_tx: broadcast::Sender<()>,
     next_checkpoint_block_number: u64,
+    source: Arc<dyn Source<Item = E>>,
     node_client: Arc<NodeClient>,
-) -> Result<tokio::task::JoinHandle<()>> {
-    let logs_stream = node_client
-        .watch_logs(
-            args.addresses.clone(),
-            &args.event,
-            next_checkpoint_block_number.into(),
-            args.poll_interval,
-        )
-        .await?
-        .flat_map(stream::iter);
+) -> Result<tokio::task::JoinHandle<()>>
+where
+    E: SourceInput + fmt::Debug + Clone + Send + Sync + 'static,
+{
+    let stream_filter = StreamFilter {
+        addresses: args.addresses.clone(),
+        event: args.event.clone(),
+        from_block_number: next_checkpoint_block_number.into(),
+        poll_interval: args.poll_interval,
+    };
+    let inputs_stream = source.stream(stream_filter).await?;
 
     // Wrap in a Arc + Mutex for interior mutability.
     // * Arc, allows sharing across async tasks/closures.
     // * Mutex, gives async mutable access:
-    let shared_logs_stream = Arc::new(Mutex::new(logs_stream));
+    let shared_inputs_stream = Arc::new(Mutex::new(inputs_stream));
     let state =
         Arc::new(Mutex::new(ProducerState { event_counter: 0, next_checkpoint_block_number }));
 
@@ -70,7 +73,7 @@ pub async fn spawn_event_producer(
 
     // A closure that returns a future
     let producer_callback = move || {
-        let logs_stream_for_producer = Arc::clone(&shared_logs_stream);
+        let inputs_stream_for_producer = Arc::clone(&shared_inputs_stream);
         let node_client_for_producer = Arc::clone(&node_client);
         let state_for_producer = Arc::clone(&state);
         async move {
@@ -92,14 +95,14 @@ pub async fn spawn_event_producer(
                 })
                 .await
             } else {
-                // Produce a log event
-                match logs_stream_for_producer.lock().await.next().await {
-                    Some(log) => {
-                        if let Some(log_block_number) = log.block_number {
+                // Produce a input event
+                match inputs_stream_for_producer.lock().await.next().await {
+                    Some(input) => {
+                        if let Some(log_block_number) = input.block_number() {
                             with_state(&state_for_producer, |s| {
                                 s.set_next_checkpoint_block_number(log_block_number);
                                 s.increment_event_counter();
-                                Ok(Event::Log(Box::new(log)))
+                                Ok(Event::Input(Box::new(input)))
                             })
                             .await
                         } else {

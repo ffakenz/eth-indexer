@@ -1,22 +1,23 @@
-use alloy::{hex, rpc::types::Log};
+use alloy::hex;
 use eyre::{Result, eyre};
 use sqlx::Error;
 use store::transfer::{model::Transfer, store::Store};
 
-use crate::processor::handle::Processor;
+use crate::sink::handle::Sink;
 
-pub struct TransferProcessor {
+pub struct TransferSink {
     pub store: Store,
 }
 
 #[async_trait::async_trait]
-impl Processor<Log, Option<Transfer>> for TransferProcessor {
-    async fn process_log(&self, log: &Log) -> Result<Option<Transfer>> {
-        let transfer: Transfer = log.try_into()?;
-        match self.store.insert_transfer(&transfer).await {
+impl Sink for TransferSink {
+    type Item = Transfer;
+
+    async fn process(&self, transfer: &Transfer) -> Result<()> {
+        match self.store.insert_transfer(transfer).await {
             Ok(_) => {
                 println!("Processed: {transfer:?}");
-                Ok(Some(transfer))
+                Ok(())
             }
             Err(e) => {
                 if let Error::Database(db_err) = &e {
@@ -28,7 +29,7 @@ impl Processor<Log, Option<Transfer>> for TransferProcessor {
                             hex::encode(&transfer.transaction_hash),
                             transfer.log_index
                         );
-                        Ok(None)
+                        Ok(())
                     } else {
                         eprintln!("Processor failed on [insert_transfer]: {e:?}");
                         Err(eyre!(e))

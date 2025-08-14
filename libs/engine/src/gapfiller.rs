@@ -1,21 +1,28 @@
 use crate::args::Args;
 use crate::checkpointer;
-use crate::processor::handle::Processor;
+use crate::sink::handle::Sink;
+use crate::source::handle::{ChunkFilter, Source, SourceInput};
 use alloy::primitives::{BlockHash, BlockNumber};
-use alloy::rpc::types::{Block, Log};
+use alloy::rpc::types::Block;
 use chain::rpc::NodeClient;
 use eyre::eyre;
 use eyre::{Report, Result};
+use std::fmt;
 use std::sync::Arc;
 use store::checkpoint::model::Checkpoint;
 use store::checkpoint::store::Store as CheckpointStore;
 
-pub async fn chunked_backfill<T>(
+pub async fn chunked_backfill<E, T>(
     args: &Args,
     node_client: &NodeClient,
+    source: Arc<dyn Source<Item = E>>,
     checkpoint_store: Arc<CheckpointStore>,
-    processor: Arc<dyn Processor<Log, T>>,
-) -> Result<Checkpoint> {
+    sink: Arc<dyn Sink<Item = T>>,
+) -> Result<Checkpoint>
+where
+    E: SourceInput + fmt::Debug + Clone,
+    T: TryFrom<E>,
+{
     // Lookup checkpoint block
     let checkpoint_block: Block = node_client
         .get_block_by_hash(args.from_block)
@@ -52,24 +59,21 @@ pub async fn chunked_backfill<T>(
             .await?
             .ok_or_else(|| eyre!("Block not found for checkpoint: {}", chunk_block_number))?;
 
-        let logs: Vec<Log> = node_client
-            .get_logs(
-                args.addresses.clone(),
-                &args.event,
-                checkpoint_number.into(),
-                chunk_block_number.into(),
-            )
-            .await?
-            .into_iter()
-            // NOTE: Logs may come from pending txs that have not yet been mined.
-            // Pending logs are re-emitted (with the same tx hash and log index)
-            // once their tx is included in a block, at which point `block_number` will be set.
-            // We skip them (ignore) here to process only confirmed logs in backfill mode.
-            .filter(|log| log.block_number.is_some())
-            .collect();
+        let chunk_filter = ChunkFilter {
+            addresses: args.addresses.clone(),
+            event: args.event.clone(),
+            from_block_number: checkpoint_number.into(),
+            to_block_number: chunk_block_number.into(),
+        };
+        let source_inputs = source.chunk(chunk_filter).await?;
 
-        for log in &logs {
-            match processor.process_log(log).await {
+        for input in source_inputs {
+            // XXX: input mapper
+            let input_cloned = input.clone();
+            let element = input
+                .try_into()
+                .map_err(|_| eyre!("Failed to convert source input: {input_cloned:?}"))?;
+            match sink.process(&element).await {
                 Ok(_) => continue,
                 Err(err) => return Err(err),
             }

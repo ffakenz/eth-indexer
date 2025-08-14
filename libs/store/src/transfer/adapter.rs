@@ -3,10 +3,10 @@ use alloy::rpc::types::Log;
 use eyre::{Result, eyre};
 use std::convert::TryFrom;
 
-impl TryFrom<&Log> for Transfer {
+impl TryFrom<Log> for Transfer {
     type Error = eyre::Report;
 
-    fn try_from(log: &Log) -> Result<Self> {
+    fn try_from(log: Log) -> Result<Self> {
         Ok(Self {
             block_number: log.block_number.ok_or_else(|| eyre!("missing block_number"))? as i64,
             block_hash: log.block_hash.ok_or_else(|| eyre!("missing block_hash"))?.to_vec(),

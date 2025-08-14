@@ -1,8 +1,8 @@
-use alloy::rpc::types::{Block, Log};
+use alloy::rpc::types::Block;
 
 #[derive(Debug)]
-pub enum Event {
+pub enum Event<E> {
     Skip,
-    Log(Box<Log>),
+    Input(Box<E>),
     Checkpoint(Box<Block>),
 }

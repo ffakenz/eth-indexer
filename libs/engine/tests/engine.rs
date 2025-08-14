@@ -3,7 +3,9 @@ mod tests {
     use alloy::primitives::BlockHash;
     use alloy::rpc::types::{Log, ValueOrArray};
     use engine::engine::Engine;
-    use engine::processor::{handle::Processor, transfer::TransferProcessor};
+    use engine::sink::{handle::Sink, transfer::TransferSink};
+    use engine::source::handle::Source;
+    use engine::source::log::LogSource;
     use eyre::Result;
     use store::checkpoint::store::Store as CheckpointStore;
     use store::client::Client;
@@ -37,8 +39,8 @@ mod tests {
         let client = Client::init(db_url).await?;
         let checkpoint_store = Arc::new(CheckpointStore::new(client.clone()));
         let transfer_store = TransferStore::new(client.clone());
-        let transfer_processor: Arc<dyn Processor<Log, Option<Transfer>>> =
-            Arc::new(TransferProcessor { store: TransferStore::new(client.clone()) });
+        let transfer_sink: Arc<dyn Sink<Item = Transfer>> =
+            Arc::new(TransferSink { store: TransferStore::new(client.clone()) });
 
         // Spin up a local Anvil node.
         // Ensure `anvil` is available in $PATH.
@@ -49,6 +51,8 @@ mod tests {
         // Create a RPC client provider.
         let rpc_url = anvil.endpoint_url();
         let node_client = NodeClient::new(rpc_url.clone(), pk.clone());
+        let transfer_source: Arc<dyn Source<Item = Log>> =
+            Arc::new(LogSource { node_client: node_client.clone() });
 
         // Deploy the `ZamaToken` contract.
         println!("Deploying contract...");
@@ -105,8 +109,9 @@ mod tests {
         let engine = Engine::start(
             &args,
             &node_client,
+            Arc::clone(&transfer_source),
             Arc::clone(&checkpoint_store),
-            Arc::clone(&transfer_processor),
+            Arc::clone(&transfer_sink),
         )
         .await?;
 
@@ -159,8 +164,9 @@ mod tests {
         let restarted_engine = Engine::start(
             &args,
             &node_client,
+            Arc::clone(&transfer_source),
             Arc::clone(&checkpoint_store),
-            Arc::clone(&transfer_processor),
+            Arc::clone(&transfer_sink),
         )
         .await?;
 

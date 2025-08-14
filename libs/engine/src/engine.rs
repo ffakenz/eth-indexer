@@ -1,11 +1,12 @@
 use crate::args::Args;
 use crate::gapfiller;
-use crate::processor::handle::Processor;
 use crate::pubsub::event::Event;
 use crate::pubsub::{publisher, subscriber};
-use alloy::rpc::types::Log;
+use crate::sink::handle::Sink;
+use crate::source::handle::{Source, SourceInput};
 use chain::rpc::NodeClient;
 use eyre::Result;
+use std::fmt;
 use std::sync::Arc;
 use store::checkpoint::store::Store as CheckpointStore;
 use tokio::sync::{broadcast, mpsc};
@@ -18,25 +19,31 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub async fn start<T: Send + Sync + 'static>(
+    pub async fn start<E, T>(
         args: &Args,
         node_client: &NodeClient,
+        source: Arc<dyn Source<Item = E>>,
         checkpoint_store: Arc<CheckpointStore>,
-        processor: Arc<dyn Processor<Log, T>>,
-    ) -> Result<Engine> {
-        // Run collect logs gap-fill sync
+        sink: Arc<dyn Sink<Item = T>>,
+    ) -> Result<Engine>
+    where
+        E: SourceInput + fmt::Debug + Clone + Send + Sync + 'static,
+        T: TryFrom<E> + Send + Sync + 'static,
+    {
+        // Run collect elements in chunks sync (gap-fill)
 
         let checkpoint = gapfiller::chunked_backfill(
             args,
             node_client,
+            Arc::clone(&source),
             Arc::clone(&checkpoint_store),
-            Arc::clone(&processor),
+            Arc::clone(&sink),
         )
         .await?;
 
-        // Run collect logs live async
+        // Run collect elements live async
 
-        let (tx, rx) = mpsc::channel::<Result<Event>>(100);
+        let (tx, rx) = mpsc::channel::<Result<Event<E>>>(100);
 
         let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
@@ -44,15 +51,16 @@ impl Engine {
             rx,
             shutdown_tx.clone(),
             Arc::clone(&checkpoint_store),
-            Arc::clone(&processor),
+            Arc::clone(&sink),
         )
         .await;
 
-        let producer_handle = publisher::spawn_event_producer(
+        let producer_handle = publisher::spawn_event_producer::<E, T>(
             args,
             tx,
             shutdown_tx.clone(),
             (checkpoint.block_number + 1) as u64,
+            Arc::clone(&source),
             Arc::new(node_client.clone()),
         )
         .await?;
