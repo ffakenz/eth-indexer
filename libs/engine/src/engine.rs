@@ -48,20 +48,15 @@ impl Engine {
         )
         .await;
 
-        // Watching logs poller
-        let next_checkpoint_number = (checkpoint.block_number + 1) as u64;
-        let shared_logs_stream =
-            publisher::watch_logs_stream(args, node_client, next_checkpoint_number).await?;
-
         let producer_handle = publisher::spawn_event_producer(
+            args,
             tx,
             shutdown_tx.clone(),
             args.checkpoint_interval,
-            next_checkpoint_number,
+            (checkpoint.block_number + 1) as u64,
             Arc::new(node_client.clone()),
-            shared_logs_stream,
         )
-        .await;
+        .await?;
 
         Ok(Self { shutdown_tx, consumer_handle, producer_handle })
     }

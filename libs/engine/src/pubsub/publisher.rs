@@ -1,44 +1,18 @@
 use crate::args::Args;
 use crate::pubsub::event::Event;
-use alloy::primitives::BlockNumber;
-use alloy::rpc::types::Log;
 use chain::rpc::NodeClient;
 use eyre::eyre;
 use eyre::{Report, Result};
+use futures_util::StreamExt;
 use futures_util::stream::{self};
-use futures_util::{Stream, StreamExt};
-use std::pin::Pin;
 use std::sync::Arc;
 use sync::producer::Producer;
 use tokio::sync::{Mutex, broadcast, mpsc};
 
-pub async fn watch_logs_stream(
-    args: &Args,
-    node_client: &NodeClient,
-    checkpoint_number: BlockNumber,
-) -> Result<Arc<Mutex<Pin<Box<impl Stream<Item = Log> + Send + 'static>>>>> {
-    let logs_stream = node_client
-        .watch_logs(
-            args.addresses.clone(),
-            &args.event,
-            checkpoint_number.into(),
-            args.poll_interval,
-        )
-        .await?
-        .flat_map(stream::iter);
-
-    // Box::pin(stream), pins the stream on the heap to guarantee it doesn't move, so it can be safely polled.
-    // Wrap the stream in a Arc + Mutex for interior mutability.
-    // * Arc, allows sharing across async tasks/closures.
-    // * Mutex, gives async mutable access:
-    let shared_logs_stream = Arc::new(Mutex::new(Box::pin(logs_stream)));
-    Ok(shared_logs_stream)
-}
-
 #[derive(Debug)]
 struct ProducerState {
     event_counter: u64,
-    checkpoint_block_number: u64,
+    next_checkpoint_block_number: u64,
 }
 
 impl ProducerState {
@@ -50,13 +24,16 @@ impl ProducerState {
         self.event_counter = 0;
     }
 
-    fn set_checkpoint_block_number(&mut self, block_number: u64) {
-        self.checkpoint_block_number = block_number;
+    fn set_next_checkpoint_block_number(&mut self, block_number: u64) {
+        self.next_checkpoint_block_number = block_number;
     }
 
     // Every N logs, produce a checkpoint event (skip first iteration)
     fn checkpoint_decision(&self, interval: u64) -> (bool, u64) {
-        (self.event_counter > 0 && self.event_counter == interval, self.checkpoint_block_number)
+        (
+            self.event_counter > 0 && self.event_counter == interval,
+            self.next_checkpoint_block_number,
+        )
     }
 }
 
@@ -66,15 +43,30 @@ async fn with_state<S, R>(state: &Arc<Mutex<S>>, f: impl FnOnce(&mut S) -> R) ->
 }
 
 pub async fn spawn_event_producer(
+    args: &Args,
     tx: mpsc::Sender<Result<Event, Report>>,
     shutdown_tx: broadcast::Sender<()>,
     // positive number: N logs between checkpoints
     checkpoint_interval: u64,
-    checkpoint_block_number: u64,
+    next_checkpoint_block_number: u64,
     node_client: Arc<NodeClient>,
-    shared_logs_stream: Arc<Mutex<Pin<Box<impl Stream<Item = Log> + Send + 'static>>>>,
-) -> tokio::task::JoinHandle<()> {
-    let state = Arc::new(Mutex::new(ProducerState { event_counter: 0, checkpoint_block_number }));
+) -> Result<tokio::task::JoinHandle<()>> {
+    let logs_stream = node_client
+        .watch_logs(
+            args.addresses.clone(),
+            &args.event,
+            next_checkpoint_block_number.into(),
+            args.poll_interval,
+        )
+        .await?
+        .flat_map(stream::iter);
+
+    // Wrap in a Arc + Mutex for interior mutability.
+    // * Arc, allows sharing across async tasks/closures.
+    // * Mutex, gives async mutable access:
+    let shared_logs_stream = Arc::new(Mutex::new(logs_stream));
+    let state =
+        Arc::new(Mutex::new(ProducerState { event_counter: 0, next_checkpoint_block_number }));
 
     // A closure that returns a future
     let producer_callback = move || {
@@ -106,7 +98,7 @@ pub async fn spawn_event_producer(
                     Some(log) => {
                         if let Some(log_block_number) = log.block_number {
                             with_state(&state_for_producer, |s| {
-                                s.set_checkpoint_block_number(log_block_number);
+                                s.set_next_checkpoint_block_number(log_block_number);
                                 s.increment_event_counter();
                                 Ok(Event::Log(Box::new(log)))
                             })
@@ -126,5 +118,5 @@ pub async fn spawn_event_producer(
     };
 
     // Spawn producer: produces received from logs stream and sends them to tx (consumer)
-    Producer::spawn(tx, shutdown_tx, producer_callback)
+    Ok(Producer::spawn(tx, shutdown_tx, producer_callback))
 }
