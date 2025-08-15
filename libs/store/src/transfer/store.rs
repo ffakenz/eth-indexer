@@ -19,7 +19,7 @@ impl Store {
 
     pub async fn insert_transfer(&self, log: &Transfer) -> Result<(), Error> {
         let query = r#"
-            INSERT INTO transfers (
+            INSERT OR IGNORE INTO transfers (
                 block_number, block_hash, transaction_hash, log_index,
                 contract_address, from_address, to_address, amount
             )

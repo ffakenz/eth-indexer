@@ -19,7 +19,7 @@ impl Store {
 
     pub async fn insert_checkpoint(&self, checkpoint: &Checkpoint) -> Result<(), Error> {
         let query = r#"
-            INSERT INTO checkpoints (block_number, block_hash, parent_hash)
+            INSERT OR IGNORE INTO checkpoints (block_number, block_hash, parent_hash)
             VALUES (?, ?, ?)
             "#;
         sqlx::query(query)

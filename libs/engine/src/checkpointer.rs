@@ -1,7 +1,5 @@
-use alloy::hex;
 use alloy::rpc::types::Block;
 use eyre::{Result, eyre};
-use sqlx::Error;
 use store::checkpoint::model::Checkpoint;
 use store::checkpoint::store::Store as CheckpointStore;
 
@@ -23,24 +21,8 @@ pub async fn save_checkpoint(
             Ok(())
         }
         Err(e) => {
-            if let Error::Database(db_err) = &e {
-                if db_err.message().contains(
-                    "UNIQUE constraint failed: checkpoints.block_number, checkpoints.block_hash",
-                ) {
-                    println!(
-                        "Duplicate checkpoint ignored: block_number={}, block_hash={}",
-                        hex::encode(&checkpoint.block_hash),
-                        checkpoint.block_number
-                    );
-                    Ok(())
-                } else {
-                    eprintln!("Checkpointer failed on [insert_checkpoint]: {e:?}");
-                    Err(eyre!(e))
-                }
-            } else {
-                eprintln!("Checkpointer fatal error on [insert_checkpoint]: {e:?}");
-                Err(eyre!(e))
-            }
+            eprintln!("Checkpointer failed on [insert_checkpoint]: {e:?}");
+            Err(eyre!(e))
         }
     }
 }
