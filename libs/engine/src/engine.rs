@@ -1,9 +1,11 @@
 use crate::args::Args;
 use crate::gapfiller;
-use crate::pubsub::event::Event;
 use crate::pubsub::{publisher, subscriber};
 use crate::sink::handle::Sink;
 use crate::source::handle::{Source, SourceInput};
+use crate::state::event::Event;
+use crate::state::logic::State;
+use crate::state::outcome::Outcome;
 use chain::rpc::NodeClient;
 use eyre::Result;
 use std::fmt::Debug;
@@ -28,7 +30,7 @@ impl Engine {
     ) -> Result<Engine>
     where
         E: SourceInput + Debug + Clone + Send + Sync + 'static,
-        T: TryFrom<E> + Debug + Send + Sync + 'static,
+        T: Outcome + TryFrom<E> + Debug + Send + Sync + 'static,
     {
         // Run collect elements in chunks sync (gap-fill)
 
@@ -40,6 +42,8 @@ impl Engine {
             Arc::clone(&sink),
         )
         .await?;
+
+        let state = State::new((checkpoint.block_number + 1) as u64);
 
         // Run collect elements live async
 
@@ -57,11 +61,11 @@ impl Engine {
 
         let producer_handle = publisher::spawn_event_producer(
             args,
+            state,
             tx,
             shutdown_tx.clone(),
-            (checkpoint.block_number + 1) as u64,
-            Arc::clone(&source),
             Arc::new(node_client.clone()),
+            Arc::clone(&source),
         )
         .await?;
 

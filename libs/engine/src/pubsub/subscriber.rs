@@ -1,5 +1,4 @@
-use crate::pubsub::event::Event;
-use crate::{checkpointer, sink::handle::Sink};
+use crate::{checkpointer, sink::handle::Sink, state::event::Event};
 use eyre::{Report, Result};
 use std::fmt::Debug;
 use std::sync::Arc;
