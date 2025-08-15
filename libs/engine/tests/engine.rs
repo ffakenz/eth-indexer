@@ -3,6 +3,7 @@ mod tests {
     use alloy::rpc::types::{Log, ValueOrArray};
     use engine::engine::Engine;
     use engine::sink::{handle::Sink, transfer::TransferSink};
+    use engine::source::filter::EventType;
     use engine::source::handle::Source;
     use engine::source::log::LogSource;
     use eyre::Result;
@@ -102,7 +103,7 @@ mod tests {
         // Start the engine
         let args = engine::args::Args {
             addresses: ValueOrArray::Value(*contract.address()),
-            event: "Transfer(address,address,uint256)".to_string(),
+            event: EventType::Transfer,
             from_block: start_block.number(),
             checkpoint_interval: 4,
             poll_interval: Duration::from_millis(100),
@@ -156,7 +157,7 @@ mod tests {
         let latest_checkpoint = checkpoint_store.get_last_checkpoint().await?.unwrap();
         let args = engine::args::Args {
             addresses: ValueOrArray::Value(*contract.address()),
-            event: "Transfer(address,address,uint256)".to_string(),
+            event: EventType::Transfer,
             from_block: latest_checkpoint.block_number as u64,
             checkpoint_interval: 1,
             poll_interval: Duration::from_millis(100),

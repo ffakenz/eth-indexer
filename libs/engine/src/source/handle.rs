@@ -1,26 +1,8 @@
-use std::time::Duration;
-
-use alloy::{
-    eips::BlockNumberOrTag,
-    primitives::{Address, BlockNumber},
-    rpc::types::ValueOrArray,
-};
+use alloy::primitives::BlockNumber;
 use eyre::Result;
 use futures_util::stream::BoxStream;
 
-pub struct ChunkFilter {
-    pub addresses: ValueOrArray<Address>,
-    pub event: String,
-    pub from_block_number: BlockNumberOrTag,
-    pub to_block_number: BlockNumberOrTag,
-}
-
-pub struct StreamFilter {
-    pub addresses: ValueOrArray<Address>,
-    pub event: String,
-    pub from_block_number: BlockNumberOrTag,
-    pub poll_interval: Duration,
-}
+use crate::source::filter::{ChunkFilter, StreamFilter};
 
 pub trait SourceInput {
     fn block_number(&self) -> Option<BlockNumber>;

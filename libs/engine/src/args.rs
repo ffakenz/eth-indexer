@@ -5,11 +5,13 @@ use alloy::{
     rpc::types::ValueOrArray,
 };
 
+use crate::source::filter::EventType;
+
 pub struct Args {
     // Addresses filter to watch
     pub addresses: ValueOrArray<Address>,
     // Event filter to watch
-    pub event: String,
+    pub event: EventType,
     // Latest known block that has been checkpointed
     pub from_block: BlockNumber,
     // Positive number of events handled between checkpoints

@@ -1,4 +1,5 @@
-use crate::source::handle::{ChunkFilter, Source, SourceInput, StreamFilter};
+use crate::source::filter::{ChunkFilter, StreamFilter};
+use crate::source::handle::{Source, SourceInput};
 use alloy::{primitives::BlockNumber, rpc::types::Log};
 use chain::rpc::NodeClient;
 use eyre::Result;
@@ -26,7 +27,7 @@ impl Source for LogSource {
             .node_client
             .get_logs(
                 filter.addresses,
-                &filter.event,
+                filter.event.as_str(),
                 filter.from_block_number,
                 filter.to_block_number,
             )
@@ -47,7 +48,7 @@ impl Source for LogSource {
             .node_client
             .watch_logs(
                 filter.addresses,
-                &filter.event,
+                filter.event.as_str(),
                 filter.from_block_number,
                 filter.poll_interval,
             )

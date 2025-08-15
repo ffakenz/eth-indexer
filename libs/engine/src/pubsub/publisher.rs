@@ -1,5 +1,6 @@
 use crate::args::Args;
-use crate::source::handle::{Source, SourceInput, StreamFilter};
+use crate::source::filter::StreamFilter;
+use crate::source::handle::{Source, SourceInput};
 use crate::state::event::Event;
 use crate::state::logic::State;
 use crate::state::outcome::Outcome;
