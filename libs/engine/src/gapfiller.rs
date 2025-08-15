@@ -50,7 +50,7 @@ where
     // Process historical chunks until we reach the snapshot tip
     while checkpoint_number <= latest_block_number {
         let chunk_block_number =
-            std::cmp::min(checkpoint_number + args.backfill_chunk_size - 1, latest_block_number);
+            std::cmp::min(checkpoint_number + args.checkpoint_interval - 1, latest_block_number);
 
         // Fetch latest processed block to have it ready to build checkpoint a checkpoint
         // as soon as we complete processing logs.
