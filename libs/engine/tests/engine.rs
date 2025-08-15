@@ -101,7 +101,7 @@ mod tests {
             addresses: ValueOrArray::Value(*contract.address()),
             event: "Transfer(address,address,uint256)".to_string(),
             from_block: start_block.number(),
-            checkpoint_interval: 1,
+            checkpoint_interval: 4,
             poll_interval: Duration::from_millis(100),
         };
         let engine = Engine::start(

@@ -41,4 +41,18 @@ impl Sink for TransferSink {
             }
         }
     }
+
+    async fn process_batch(&self, transfers: &[Transfer]) -> Result<()> {
+        match self.store.insert_transfers_batch(transfers).await {
+            Ok(_) => {
+                let nbr_of_rows = transfers.len();
+                println!("Processed batch: {nbr_of_rows:?}");
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("Processor failed on [insert_transfer]: {e:?}");
+                Err(eyre!(e))
+            }
+        }
+    }
 }

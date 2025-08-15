@@ -32,6 +32,8 @@ where
     // Local mut state
     let mut checkpoint_number: BlockNumber = args.from_block;
 
+    println!("Backfill started at block number: {checkpoint_number:?}");
+
     // Process historical chunks until we reach the snapshot tip
     while checkpoint_number <= latest_block_number {
         // A safe checked addition avoids silent wraparound
@@ -53,17 +55,19 @@ where
         };
         let source_inputs = source.chunk(chunk_filter).await?;
 
-        for input in source_inputs {
-            match input.clone().try_into() {
+        let elements: Vec<_> = source_inputs
+            .into_iter()
+            .filter_map(|input| match input.clone().try_into() {
+                Ok(element) => Some(element),
                 Err(e) => {
                     eprintln!("Skip: Failed to convert sourced input: {input:?} - reason {e:?}");
-                    continue;
+                    None
                 }
-                Ok(element) => match sink.process(&element).await {
-                    Ok(_) => continue,
-                    Err(err) => return Err(err),
-                },
-            }
+            })
+            .collect();
+
+        if !elements.is_empty() {
+            sink.process_batch(&elements).await?;
         }
 
         match checkpointer::save_checkpoint(&chunk_checkpoint_block, &checkpoint_store).await {
@@ -76,6 +80,8 @@ where
 
         checkpoint_number = chunk_block_number + 1;
     }
+
+    println!("Backfill finished at block number: {latest_block_number:?}");
 
     Ok(Checkpoint {
         block_number: latest_block_number as i64,
