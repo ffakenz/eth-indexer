@@ -1,8 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
-    "libs/chain"
-    , "libs/engine"
-    , "libs/store"
-    , "libs/sync"
+    "app/cli",
+    "libs/chain",
+    "libs/engine",
+    "libs/store",
+    "libs/sync",
 ]

@@ -34,3 +34,6 @@ check: ## Run fmt-check, lint, and tests
 	@$(MAKE) fmt-check
 	@$(MAKE) lint
 	@$(MAKE) test-all
+
+run: ## Run the CLI app
+	cargo run --package cli -- $(ARGS)
