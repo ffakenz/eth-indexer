@@ -33,6 +33,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_polling_transfer_event_logs() -> Result<()> {
+        // install global subscriber configured based on RUST_LOG envvar.
+        tracing_subscriber::fmt::init();
+
         // Init SQLite store
         let db_url = "sqlite::memory:";
         let client = Client::init(db_url).await?;

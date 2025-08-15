@@ -14,11 +14,11 @@ impl Sink for TransferSink {
     async fn process(&self, transfer: &Transfer) -> Result<()> {
         match self.store.insert_transfer(transfer).await {
             Ok(_) => {
-                println!("Processed: {transfer:?}");
+                tracing::info!("Processed: {transfer:?}");
                 Ok(())
             }
             Err(e) => {
-                eprintln!("Processor failed on [insert_transfer]: {e:?}");
+                tracing::error!("Processor failed on [insert_transfer]: {e:?}");
                 Err(eyre!(e))
             }
         }
@@ -28,11 +28,11 @@ impl Sink for TransferSink {
         match self.store.insert_transfers_batch(transfers).await {
             Ok(_) => {
                 let nbr_of_rows = transfers.len();
-                println!("Processed batch: {nbr_of_rows:?}");
+                tracing::info!("Processed batch: {nbr_of_rows:?}");
                 Ok(())
             }
             Err(e) => {
-                eprintln!("Processor failed on [insert_transfers_batch]: {e:?}");
+                tracing::error!("Processor failed on [insert_transfers_batch]: {e:?}");
                 Err(eyre!(e))
             }
         }

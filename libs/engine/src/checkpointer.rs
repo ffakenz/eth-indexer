@@ -17,11 +17,13 @@ pub async fn save_checkpoint(
 
     match checkpoint_store.insert_checkpoint(&checkpoint).await {
         Ok(_) => {
-            println!("Checkpoint saved at block number {block_number:?} and hash {block_hash:?}");
+            tracing::info!(
+                "Checkpoint saved at block number {block_number:?} and hash {block_hash:?}"
+            );
             Ok(())
         }
         Err(e) => {
-            eprintln!("Checkpointer failed on [insert_checkpoint]: {e:?}");
+            tracing::error!("Checkpointer failed on [insert_checkpoint]: {e:?}");
             Err(eyre!(e))
         }
     }

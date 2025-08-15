@@ -62,7 +62,7 @@ impl State {
     {
         match input.clone().try_into() {
             Err(e) => {
-                eprintln!("Skip: Failed to convert consumed input: {input:?} - reason {e:?}");
+                tracing::error!("Skip: Failed to convert consumed input: {input:?} - reason {e:?}");
                 self.increment_event_counter();
                 Ok(Event::Skip)
             }

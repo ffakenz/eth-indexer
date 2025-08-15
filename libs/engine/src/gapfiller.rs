@@ -32,7 +32,7 @@ where
     // Local mut state
     let mut checkpoint_number: BlockNumber = args.from_block;
 
-    println!("Backfill started at block number: {checkpoint_number:?}");
+    tracing::info!("Backfill started at block number: {checkpoint_number:?}");
 
     // Process historical chunks until we reach the snapshot tip
     while checkpoint_number <= latest_block_number {
@@ -60,7 +60,9 @@ where
             .filter_map(|input| match input.clone().try_into() {
                 Ok(element) => Some(element),
                 Err(e) => {
-                    eprintln!("Skip: Failed to convert sourced input: {input:?} - reason {e:?}");
+                    tracing::error!(
+                        "Skip: Failed to convert sourced input: {input:?} - reason {e:?}"
+                    );
                     None
                 }
             })
@@ -73,7 +75,7 @@ where
         match checkpointer::save_checkpoint(&chunk_checkpoint_block, &checkpoint_store).await {
             Ok(success) => success,
             Err(e) => {
-                eprintln!("Backfill failed on [save_checkpoint]: {e:?}");
+                tracing::error!("Backfill failed on [save_checkpoint]: {e:?}");
                 return Err(eyre!(e));
             }
         }
@@ -81,7 +83,7 @@ where
         checkpoint_number = chunk_block_number + 1;
     }
 
-    println!("Backfill finished at block number: {latest_block_number:?}");
+    tracing::info!("Backfill finished at block number: {latest_block_number:?}");
 
     Ok(Checkpoint {
         block_number: latest_block_number as i64,
