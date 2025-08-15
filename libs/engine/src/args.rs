@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use alloy::{
-    primitives::{Address, BlockHash},
+    primitives::{Address, BlockNumber},
     rpc::types::ValueOrArray,
 };
 
@@ -11,7 +11,7 @@ pub struct Args {
     // Event filter to watch
     pub event: String,
     // Latest known block that has been checkpointed
-    pub from_block: BlockHash,
+    pub from_block: BlockNumber,
     // Positive number of events handled between checkpoints
     pub checkpoint_interval: u64,
     // Throttling (rate-limit) node requests:

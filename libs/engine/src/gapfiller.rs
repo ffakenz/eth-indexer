@@ -2,7 +2,7 @@ use crate::args::Args;
 use crate::checkpointer;
 use crate::sink::handle::Sink;
 use crate::source::handle::{ChunkFilter, Source, SourceInput};
-use alloy::primitives::{BlockHash, BlockNumber};
+use alloy::primitives::BlockNumber;
 use alloy::rpc::types::Block;
 use chain::rpc::NodeClient;
 use eyre::eyre;
@@ -23,15 +23,6 @@ where
     E: SourceInput + fmt::Debug + Clone,
     T: TryFrom<E>,
 {
-    // Lookup checkpoint block
-    let checkpoint_block: Block = node_client
-        .get_block_by_hash(args.from_block)
-        .await?
-        .ok_or_else(|| Report::msg(format!("Checkpoint block not found: {:?}", args.from_block)))?;
-
-    // Local mut state
-    let mut checkpoint_number: BlockNumber = checkpoint_block.number();
-
     // Lookup latest block
     let latest_block: Block = node_client
         .get_latest_block()
@@ -39,13 +30,9 @@ where
         .ok_or_else(|| Report::msg("Latest block not found"))?;
 
     let latest_block_number: BlockNumber = latest_block.number();
-    let latest_block_hash: BlockHash = latest_block.hash();
 
-    let final_checkpoint = Checkpoint {
-        block_number: latest_block_number as i64,
-        block_hash: latest_block_hash.to_vec(),
-        parent_hash: latest_block.header.parent_hash.to_vec(),
-    };
+    // Local mut state
+    let mut checkpoint_number: BlockNumber = args.from_block;
 
     // Process historical chunks until we reach the snapshot tip
     while checkpoint_number <= latest_block_number {
@@ -72,7 +59,7 @@ where
             let input_cloned = input.clone();
             let element = input
                 .try_into()
-                .map_err(|_| eyre!("Failed to convert source input: {input_cloned:?}"))?;
+                .map_err(|_| eyre!("Failed to convert sourced input: {input_cloned:?}"))?;
             match sink.process(&element).await {
                 Ok(_) => continue,
                 Err(err) => return Err(err),
@@ -90,5 +77,9 @@ where
         checkpoint_number = chunk_block_number + 1;
     }
 
-    Ok(final_checkpoint)
+    Ok(Checkpoint {
+        block_number: latest_block_number as i64,
+        block_hash: latest_block.hash().to_vec(),
+        parent_hash: latest_block.header.parent_hash.to_vec(),
+    })
 }

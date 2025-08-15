@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use alloy::primitives::BlockHash;
     use alloy::rpc::types::{Log, ValueOrArray};
     use engine::engine::Engine;
     use engine::sink::{handle::Sink, transfer::TransferSink};
@@ -101,7 +100,7 @@ mod tests {
         let args = engine::args::Args {
             addresses: ValueOrArray::Value(*contract.address()),
             event: "Transfer(address,address,uint256)".to_string(),
-            from_block: start_block_hash,
+            from_block: start_block.number(),
             checkpoint_interval: 1,
             poll_interval: Duration::from_millis(100),
         };
@@ -155,7 +154,7 @@ mod tests {
         let args = engine::args::Args {
             addresses: ValueOrArray::Value(*contract.address()),
             event: "Transfer(address,address,uint256)".to_string(),
-            from_block: BlockHash::from_slice(&latest_checkpoint.block_hash),
+            from_block: latest_checkpoint.block_number as u64,
             checkpoint_interval: 1,
             poll_interval: Duration::from_millis(100),
         };
