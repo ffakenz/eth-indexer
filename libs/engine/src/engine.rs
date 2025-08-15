@@ -30,6 +30,7 @@ impl Engine {
     ) -> Result<Engine>
     where
         E: SourceInput + Debug + Clone + Send + Sync + 'static,
+        <E as TryInto<T>>::Error: Debug,
         T: Outcome + TryFrom<E> + Debug + Send + Sync + 'static,
     {
         // Run collect elements in chunks sync (gap-fill)

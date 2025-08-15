@@ -4,7 +4,7 @@ use crate::state::event::Event;
 use crate::state::logic::State;
 use crate::state::outcome::Outcome;
 use chain::rpc::NodeClient;
-use eyre::{Report, Result};
+use eyre::{Result, eyre};
 use futures_util::StreamExt;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -19,13 +19,14 @@ pub async fn with_state<S, R>(state: &Arc<Mutex<S>>, f: impl FnOnce(&mut S) -> R
 pub async fn spawn_event_producer<E, T>(
     args: &Args,
     state: State,
-    tx: mpsc::Sender<Result<Event<T>, Report>>,
+    tx: mpsc::Sender<Result<Event<T>>>,
     shutdown_tx: broadcast::Sender<()>,
     node_client: Arc<NodeClient>,
     source: Arc<dyn Source<Item = E>>,
 ) -> Result<tokio::task::JoinHandle<()>>
 where
     E: SourceInput + Clone + Debug + Send + Sync + 'static,
+    <E as TryInto<T>>::Error: Debug,
     T: Outcome + TryFrom<E> + Send + Sync + 'static,
 {
     let checkpoint_interval = args.checkpoint_interval;
@@ -59,7 +60,7 @@ where
             } else {
                 match inputs_stream_for_producer.lock().await.next().await {
                     Some(input) => with_state(&state_for_producer, |s| s.on_input(input)).await,
-                    None => Err(Report::msg("Stream ended")),
+                    None => Err(eyre!("Stream ended")),
                 }
             }
         }

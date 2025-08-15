@@ -1,5 +1,5 @@
 use crate::{checkpointer, sink::handle::Sink, state::event::Event};
-use eyre::{Report, Result};
+use eyre::Result;
 use std::fmt::Debug;
 use std::sync::Arc;
 use store::checkpoint::store::Store as CheckpointStore;
@@ -7,7 +7,7 @@ use sync::consumer::Consumer;
 use tokio::sync::{broadcast, mpsc};
 
 pub async fn spawn_event_consumer<T>(
-    rx: mpsc::Receiver<Result<Event<T>, Report>>,
+    rx: mpsc::Receiver<Result<Event<T>>>,
     shutdown_tx: broadcast::Sender<()>,
     checkpoint_store: Arc<CheckpointStore>,
     sink: Arc<dyn Sink<Item = T>>,

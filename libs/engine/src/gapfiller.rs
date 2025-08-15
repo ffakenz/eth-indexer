@@ -5,9 +5,8 @@ use crate::source::handle::{ChunkFilter, Source, SourceInput};
 use alloy::primitives::BlockNumber;
 use alloy::rpc::types::Block;
 use chain::rpc::NodeClient;
-use eyre::eyre;
-use eyre::{Report, Result};
-use std::fmt;
+use eyre::{Result, eyre};
+use std::fmt::Debug;
 use std::sync::Arc;
 use store::checkpoint::model::Checkpoint;
 use store::checkpoint::store::Store as CheckpointStore;
@@ -20,14 +19,13 @@ pub async fn chunked_backfill<E, T>(
     sink: Arc<dyn Sink<Item = T>>,
 ) -> Result<Checkpoint>
 where
-    E: SourceInput + fmt::Debug + Clone,
+    E: SourceInput + Debug + Clone,
+    <E as TryInto<T>>::Error: Debug,
     T: TryFrom<E>,
 {
     // Lookup latest block
-    let latest_block: Block = node_client
-        .get_latest_block()
-        .await?
-        .ok_or_else(|| Report::msg("Latest block not found"))?;
+    let latest_block: Block =
+        node_client.get_latest_block().await?.ok_or_else(|| eyre!("Latest block not found"))?;
 
     let latest_block_number: BlockNumber = latest_block.number();
 
@@ -55,14 +53,15 @@ where
         let source_inputs = source.chunk(chunk_filter).await?;
 
         for input in source_inputs {
-            // XXX: input mapper
-            let input_cloned = input.clone();
-            let element = input
-                .try_into()
-                .map_err(|_| eyre!("Failed to convert sourced input: {input_cloned:?}"))?;
-            match sink.process(&element).await {
-                Ok(_) => continue,
-                Err(err) => return Err(err),
+            match input.clone().try_into() {
+                Err(e) => {
+                    eprintln!("Skip: Failed to convert sourced input: {input:?} - reason {e:?}");
+                    continue;
+                }
+                Ok(element) => match sink.process(&element).await {
+                    Ok(_) => continue,
+                    Err(err) => return Err(err),
+                },
             }
         }
 

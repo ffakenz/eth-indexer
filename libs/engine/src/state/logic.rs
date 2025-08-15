@@ -3,7 +3,7 @@ use crate::{
     state::{event::Event, outcome::Outcome},
 };
 use alloy::rpc::types::Block;
-use eyre::{Result, eyre};
+use eyre::Result;
 use std::fmt::Debug;
 
 #[derive(Debug)]
@@ -57,15 +57,12 @@ impl State {
     pub fn on_input<E, T>(&mut self, input: E) -> Result<Event<T>>
     where
         E: SourceInput + TryInto<T> + Clone + Debug,
+        <E as TryInto<T>>::Error: Debug,
         T: Outcome + TryFrom<E>,
     {
-        // XXX: input mapper
-        let input_cloned = input.clone();
-        match input
-            .try_into()
-            .map_err(|_| eyre!("Failed to convert consumed input: {input_cloned:?}"))
-        {
-            Err(_) => {
+        match input.clone().try_into() {
+            Err(e) => {
+                eprintln!("Skip: Failed to convert consumed input: {input:?} - reason {e:?}");
                 self.increment_event_counter();
                 Ok(Event::Skip)
             }
