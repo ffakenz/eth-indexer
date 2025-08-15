@@ -6,7 +6,7 @@ use crate::sink::handle::Sink;
 use crate::source::handle::{Source, SourceInput};
 use chain::rpc::NodeClient;
 use eyre::Result;
-use std::fmt;
+use std::fmt::Debug;
 use std::sync::Arc;
 use store::checkpoint::store::Store as CheckpointStore;
 use tokio::sync::{broadcast, mpsc};
@@ -27,8 +27,8 @@ impl Engine {
         sink: Arc<dyn Sink<Item = T>>,
     ) -> Result<Engine>
     where
-        E: SourceInput + fmt::Debug + Clone + Send + Sync + 'static,
-        T: TryFrom<E> + Send + Sync + 'static,
+        E: SourceInput + Debug + Clone + Send + Sync + 'static,
+        T: TryFrom<E> + Debug + Send + Sync + 'static,
     {
         // Run collect elements in chunks sync (gap-fill)
 
@@ -43,7 +43,7 @@ impl Engine {
 
         // Run collect elements live async
 
-        let (tx, rx) = mpsc::channel::<Result<Event<E>>>(100);
+        let (tx, rx) = mpsc::channel::<Result<Event<T>>>(100);
 
         let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
@@ -55,7 +55,7 @@ impl Engine {
         )
         .await;
 
-        let producer_handle = publisher::spawn_event_producer::<E, T>(
+        let producer_handle = publisher::spawn_event_producer(
             args,
             tx,
             shutdown_tx.clone(),

@@ -1,8 +1,8 @@
 use alloy::rpc::types::Block;
 
 #[derive(Debug)]
-pub enum Event<E> {
+pub enum Event<T> {
     Skip,
-    Input(Box<E>),
+    Element(Box<T>),
     Checkpoint(Box<Block>),
 }

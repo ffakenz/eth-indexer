@@ -5,7 +5,7 @@ use chain::rpc::NodeClient;
 use eyre::eyre;
 use eyre::{Report, Result};
 use futures_util::StreamExt;
-use std::fmt;
+use std::fmt::Debug;
 use std::sync::Arc;
 use sync::producer::Producer;
 use tokio::sync::{Mutex, broadcast, mpsc};
@@ -45,14 +45,15 @@ async fn with_state<S, R>(state: &Arc<Mutex<S>>, f: impl FnOnce(&mut S) -> R) ->
 
 pub async fn spawn_event_producer<E, T>(
     args: &Args,
-    tx: mpsc::Sender<Result<Event<E>, Report>>,
+    tx: mpsc::Sender<Result<Event<T>, Report>>,
     shutdown_tx: broadcast::Sender<()>,
     next_checkpoint_block_number: u64,
     source: Arc<dyn Source<Item = E>>,
     node_client: Arc<NodeClient>,
 ) -> Result<tokio::task::JoinHandle<()>>
 where
-    E: SourceInput + fmt::Debug + Clone + Send + Sync + 'static,
+    E: SourceInput + Clone + Debug + Send + Sync + 'static,
+    T: TryFrom<E> + Send + Sync + 'static,
 {
     let stream_filter = StreamFilter {
         addresses: args.addresses.clone(),
@@ -99,12 +100,27 @@ where
                 match inputs_stream_for_producer.lock().await.next().await {
                     Some(input) => {
                         if let Some(log_block_number) = input.block_number() {
-                            with_state(&state_for_producer, |s| {
-                                s.set_next_checkpoint_block_number(log_block_number);
-                                s.increment_event_counter();
-                                Ok(Event::Input(Box::new(input)))
-                            })
-                            .await
+                            // XXX: input mapper
+                            let input_cloned = input.clone();
+                            match input.try_into().map_err(|_| {
+                                eyre!("Failed to convert consumed input: {input_cloned:?}")
+                            }) {
+                                Err(_) => {
+                                    with_state(&state_for_producer, |s| {
+                                        s.increment_event_counter();
+                                        Ok(Event::Skip)
+                                    })
+                                    .await
+                                }
+                                Ok(e) => {
+                                    with_state(&state_for_producer, |s| {
+                                        s.set_next_checkpoint_block_number(log_block_number);
+                                        s.increment_event_counter();
+                                        Ok(Event::Element(Box::new(e)))
+                                    })
+                                    .await
+                                }
+                            }
                         } else {
                             with_state(&state_for_producer, |s| {
                                 s.increment_event_counter();
