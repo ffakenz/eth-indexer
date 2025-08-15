@@ -20,6 +20,19 @@ pub struct Engine {
     producer_handle: JoinHandle<()>,
 }
 
+fn channel_size(args: &Args) -> usize {
+    // safety multiplier to handle bursts
+    let burst_factor: usize = 2;
+    // expected block/event rate
+    let avg_events_per_block: usize = 50;
+    // number of blocks to wait before considering a block irreversible
+    let finality: usize = 12;
+    let channel_size: usize = std::cmp::max(finality, args.checkpoint_interval as usize)
+        * avg_events_per_block
+        * burst_factor;
+    channel_size
+}
+
 impl Engine {
     pub async fn start<E, T>(
         args: &Args,
@@ -47,8 +60,7 @@ impl Engine {
         let state = State::new((checkpoint.block_number + 1) as u64);
 
         // Run collect elements live async
-
-        let (tx, rx) = mpsc::channel::<Result<Event<T>>>(100);
+        let (tx, rx) = mpsc::channel::<Result<Event<T>>>(channel_size(args));
 
         let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
