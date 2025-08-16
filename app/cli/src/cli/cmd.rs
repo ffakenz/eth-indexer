@@ -1,6 +1,8 @@
 use clap::command;
 use clap::{Parser, Subcommand};
 
+use crate::cli::query::args::Query;
+
 use super::engine::args::Args;
 
 #[derive(Parser, Debug)]
@@ -15,4 +17,5 @@ pub struct Cli {
 pub enum Command {
     /// Start eth indexer engine
     Engine(Args),
+    Select(Query),
 }

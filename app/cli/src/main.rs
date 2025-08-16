@@ -3,6 +3,11 @@ mod cli {
         pub mod args;
         pub mod run;
     }
+    pub mod query {
+        pub mod args;
+        pub mod read;
+        pub mod run;
+    }
     pub mod cmd;
     pub mod read;
 }
@@ -34,6 +39,10 @@ async fn main() -> Result<()> {
                 checkpoint_interval: args.checkpoint_interval,
             };
             cli::engine::run::start(&args.rpc_url, &args.db_url, &args.signer_pk, start_args).await
+        }
+        Command::Select(query) => {
+            tracing::info!("Engine Query: {:?}", query);
+            cli::query::run::select(query).await
         }
     }
 }
