@@ -6,6 +6,7 @@ mod cli {
     pub mod query {
         pub mod args;
         pub mod read;
+        pub mod response;
         pub mod run;
     }
     pub mod cmd;

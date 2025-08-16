@@ -1,5 +1,6 @@
 use crate::cli::query::args::Query;
 use crate::cli::query::read::{Entity, FromBlock};
+use crate::cli::query::response::{CheckpointResponse, TransferResponse};
 use eyre::{Result, eyre};
 use store::client::Client;
 
@@ -27,7 +28,9 @@ pub async fn select(query: &Query) -> Result<()> {
             if transfers.is_empty() {
                 println!("No Transfers Found")
             } else {
-                println!("{transfers:?}")
+                let response: Vec<TransferResponse> =
+                    transfers.into_iter().map(TransferResponse).collect();
+                println!("{}", serde_json::to_string_pretty(&response).unwrap());
             }
         }
         Entity::Checkpoint => {
@@ -38,7 +41,9 @@ pub async fn select(query: &Query) -> Result<()> {
                 .await?
                 .ok_or(eyre!("Checkpoint Not Found"))?;
 
-            println!("{checkpoint:?}")
+            let response = CheckpointResponse(checkpoint);
+
+            println!("{}", serde_json::to_string_pretty(&response).unwrap());
         }
     }
 

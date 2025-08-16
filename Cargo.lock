@@ -1161,6 +1161,8 @@ dependencies = [
  "clap",
  "engine",
  "eyre",
+ "serde",
+ "serde_json",
  "store",
  "tokio",
  "tracing",
