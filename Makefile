@@ -37,3 +37,33 @@ check: ## Run fmt-check, lint, and tests
 
 run: ## Run the CLI app
 	cargo run --package cli -- $(filter-out $@,$(MAKECMDGOALS))
+
+# --- DEMO (devnet) ---
+.PHONY: demo demo.setup demo.play demo.engine
+
+demo: ## Show available demo commands
+	@echo "Available demo commands:"
+	@echo "  make demo.setup     Deploy ERC20, mint tokens to ALICE, prepare .dev-env"
+	@echo "  make demo.play      Run transfers between ALICE and BOB"
+	@echo "  make demo.engine    Start the engine, watching demo contract"
+
+demo.setup: ## Deploy ERC20 contract, mint tokens to ALICE, prepare .dev-env
+	./resources/tests/demo/setup.sh
+
+demo.play: ## Run transfers between ALICE and BOB
+	./resources/tests/demo/play.sh
+
+demo.engine: ## Start the engine to watch demo contract
+	@set -a; \
+	. resources/tests/demo/.env; \
+	. resources/tests/demo/.dev-env; \
+	set +a; \
+	cargo run --package cli -- \
+		--rpc-url "$$RPC_URL" \
+		--db-url "sqlite::memory:" \
+		--signer-pk "$$PK_ALICE" \
+		--addresses "$$CONTRACT_ADDR" \
+		--event transfer \
+		--from-block "$$BLOCK_NBR" \
+		--checkpoint-interval 10 \
+		--poll-interval 100
