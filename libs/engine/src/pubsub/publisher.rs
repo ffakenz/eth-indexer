@@ -55,13 +55,20 @@ where
             let (do_checkpoint, checkpoint_block_number) =
                 state_for_producer.lock().await.checkpoint_decision(checkpoint_interval);
             if do_checkpoint {
+                tracing::info!("Publisher checkpointing: {checkpoint_block_number:?}");
                 let maybe_checkpoint_block =
                     node_client_for_producer.get_block_by_number(checkpoint_block_number).await?;
                 with_state(&state_for_producer, |s| s.on_checkpoint(maybe_checkpoint_block)).await
             } else {
                 match inputs_stream_for_producer.lock().await.next().await {
-                    Some(input) => with_state(&state_for_producer, |s| s.on_input(input)).await,
-                    None => Err(eyre!("Stream ended")),
+                    Some(input) => {
+                        tracing::info!("Publisher rolling forward: {input:?}");
+                        with_state(&state_for_producer, |s| s.on_input(input)).await
+                    }
+                    None => {
+                        tracing::error!("Stream ended");
+                        Err(eyre!("Stream ended"))
+                    }
                 }
             }
         }

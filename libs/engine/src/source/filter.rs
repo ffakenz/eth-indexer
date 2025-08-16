@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use alloy::{eips::BlockNumberOrTag, primitives::Address, rpc::types::ValueOrArray};
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum EventType {
     Transfer,
 }

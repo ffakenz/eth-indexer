@@ -4,3 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+clap = { version = "4.5.45", features = ["derive"] }
+chain = { path = "../../libs/chain" }
+store = { path = "../../libs/store" }
+engine = { path = "../../libs/engine" }
+eyre = "0.6.12"
+tokio = { version = "1.47.1", features = ["rt-multi-thread", "signal"] }
+alloy = { version = "1.0.24", features = ["rpc-types"] }
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"

@@ -7,6 +7,7 @@ use alloy::{
 
 use crate::source::filter::EventType;
 
+#[derive(Debug)]
 pub struct Args {
     // Addresses filter to watch
     pub addresses: ValueOrArray<Address>,

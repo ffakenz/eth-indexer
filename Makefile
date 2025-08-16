@@ -36,4 +36,4 @@ check: ## Run fmt-check, lint, and tests
 	@$(MAKE) test-all
 
 run: ## Run the CLI app
-	cargo run --package cli -- $(ARGS)
+	cargo run --package cli -- $(filter-out $@,$(MAKECMDGOALS))
