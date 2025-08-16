@@ -95,5 +95,5 @@ sleep 1
 cleanup
 
 # query engine outcomes
-make demo.query.checkpoint
-make demo.query.transfer
+make demo.query.checkpoint | jq
+make demo.query.transfer | jq

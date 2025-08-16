@@ -23,10 +23,9 @@ use crate::cli::read;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // install global subscriber configured based on RUST_LOG envvar.
-    tracing_subscriber::fmt::init();
-
     let cli = Cli::parse();
+
+    init_tracing(&cli);
 
     match &cli.command {
         Command::Engine(args) => {
@@ -44,6 +43,18 @@ async fn main() -> Result<()> {
         Command::Select(query) => {
             tracing::info!("Engine Query: {:?}", query);
             cli::query::run::select(query).await
+        }
+    }
+}
+
+fn init_tracing(cli: &Cli) {
+    match &cli.command {
+        Command::Engine(_) => {
+            // install global subscriber configured based on RUST_LOG envvar.
+            tracing_subscriber::fmt::init();
+        }
+        Command::Select(_) => {
+            tracing_subscriber::fmt::Subscriber::builder().with_writer(std::io::stderr).init();
         }
     }
 }
