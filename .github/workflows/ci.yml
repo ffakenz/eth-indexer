@@ -27,9 +27,7 @@ jobs:
       run: |
         mkdir -p \
           ~/.rustup/toolchains \
-          ~/.cargo/registry \
-          ~/.cargo/cargo-audit \
-          ~/.cargo/git
+          ~/.cargo/cargo-audit/bin
 
     # -------------------
     # Rust toolchain cache
@@ -41,8 +39,12 @@ jobs:
         path: ~/.rustup/toolchains
         key: rust-toolchain-${{ matrix.toolchain }}-${{ runner.os }}
 
+    - name: Install Rust toolchain (if not cached)
+      if: steps.cache-rustup.outputs.cache-hit != 'true'
+      run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+
     - name: Save Rust toolchain cache
-      if: always() && steps.cache-rustup.outputs.cache-hit != 'true'
+      if: steps.cache-rustup.outputs.cache-hit != 'true'
       uses: actions/cache/save@v3
       with:
         path: ~/.rustup/toolchains
@@ -60,8 +62,11 @@ jobs:
           ~/.cargo/git
         key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
+    - name: Fetch dependencies
+      run: cargo fetch
+
     - name: Save Cargo cache
-      if: always() && steps.cache-cargo.outputs.cache-hit != 'true'
+      if: steps.cache-cargo.outputs.cache-hit != 'true'
       uses: actions/cache/save@v3
       with:
         path: |
@@ -76,31 +81,26 @@ jobs:
       id: cache-audit
       uses: actions/cache/restore@v3
       with:
-        path: ~/.cargo/cargo-audit
+        path: ~/.cargo/cargo-audit/bin
         key: cargo-audit-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Save cargo-audit cache
-      if: always() && steps.cache-audit.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v3
-      with:
-        path: ~/.cargo/cargo-audit
-        key: cargo-audit-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-
-    # -------------------
-    # Install steps
-    # -------------------
-    - name: Install Rust toolchain (if not cached)
-      if: steps.cache-rustup.outputs.cache-hit != 'true'
-      run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
 
     - name: Install cargo-audit (if not cached)
       if: steps.cache-audit.outputs.cache-hit != 'true'
-      run: |
-        cargo install cargo-audit --locked --root $HOME/.cargo/cargo-audit
+      run: cargo install cargo-audit --locked --root $HOME/.cargo/cargo-audit
 
     - name: Add cargo-audit to PATH
       run: echo "$HOME/.cargo/cargo-audit/bin" >> $GITHUB_PATH
 
+    - name: Save cargo-audit cache
+      if: steps.cache-audit.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v3
+      with:
+        path: ~/.cargo/cargo-audit/bin
+        key: cargo-audit-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+    # -------------------
+    # Foundry cache
+    # -------------------
     - name: Install Foundry
       uses: foundry-rs/foundry-toolchain@v1
       with:
@@ -110,6 +110,9 @@ jobs:
         cache-restore-keys: |
           foundry-
 
+    # -------------------
+    # Debug
+    # -------------------
     - name: Verify installed tools
       run: |
         rustc --version
@@ -133,8 +136,10 @@ jobs:
     - name: e2e
       run: |
         nohup anvil --block-time 5 > anvil.log 2>&1 &
+        ANVIL_PID=$!
         sleep 5
         make demo.test
+        kill $ANVIL_PID
 
     # -------------------
     # Upload artifacts
@@ -154,7 +159,7 @@ jobs:
         if-no-files-found: ignore
 
     - name: Install eth-indexer binary
-      run: cargo install --path ./app/cli --bin eth-indexer
+      run: cargo install --path ./app/cli --bin eth-indexer --root target/install
 
     - name: Upload CLI binary
       uses: actions/upload-artifact@v4
