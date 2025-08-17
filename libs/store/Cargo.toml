@@ -9,7 +9,13 @@ path = "src/lib.rs"
 test = false
 
 [dependencies]
-sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio-rustls"] }
+sqlx = { version = "0.8.6", default-features = false, features = [
+    "sqlite",
+    "runtime-tokio-rustls",
+    "macros",
+] }
 eyre = "0.6.12"
-alloy = { version = "1.0.24", features = ["rpc-types"] }
+alloy = { version = "1.0.24", default-features = false, features = [
+    "rpc-types",
+] }
 tokio = { version = "1.47.1", features = ["rt-multi-thread"] }

@@ -9,7 +9,18 @@ path = "src/lib.rs"
 test = false
 
 [dependencies]
-alloy = { version = "1.0.24", features = ["node-bindings", "rpc-client"] }
+alloy = { version = "1.0.24", default-features = false, features = [
+    "node-bindings",
+    "rpc-client",
+    "eips",
+    "network",
+    "providers",
+    "signers",
+    "signer-local",
+    "sol-types",
+    "json",
+    "contract",
+] }
 eyre = "0.6.12"
 futures-util = "0.3.31"
 tokio = { version = "1.47.1", features = ["rt-multi-thread", "macros"] }

@@ -10,7 +10,9 @@ store = { path = "../../libs/store" }
 engine = { path = "../../libs/engine" }
 eyre = "0.6.12"
 tokio = { version = "1.47.1", features = ["rt-multi-thread", "signal"] }
-alloy = { version = "1.0.24", features = ["rpc-types"] }
+alloy = { version = "1.0.24", default-features = false, features = [
+    "rpc-types",
+] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 serde = { version = "1.0.219", features = ["derive"] }
