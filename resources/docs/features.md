@@ -5,6 +5,7 @@
   Ingests filtered on-chain logs from RPC (source) and persists transfer events in SQLite (sink).
   - **Gapfiller** → (sync) on startup, it backfills log events in batches from a given block number
   - **Live-Watcher** → (async) streams incoming logs for processing
+  - **Block bloom filtering** → used by both Gapfiller (`eth_getLogs`) and Live-Watcher (`eth_getFilterChanges`) under the hood to efficiently skip blocks without relevant events.
   - **Checkpointer** → (periodically) persists checkpoint snapshots at a configurable interval
 
 - **CLI**
@@ -18,12 +19,10 @@
 
 - **Flexible**
   - Storage via [SQLx](https://github.com/launchbadge/sqlx) → async, compile-time checked queries, runtime and database agnostic
-  - Eth-Toolkit via [Alloy](https://alloy.rs/introduction/why-alloy) → modular, high-performance, and developer-friendly experience for building on EVM-compatible chains
+  - Ethereum-Toolkit via [Alloy](https://alloy.rs/introduction/why-alloy) → modular, high-performance, and developer-friendly experience for building on EVM-compatible chains
 
 ### Later
 
 - [ ] Handling reorgs and finality
-
-- [ ] Block bloom filtering
 
 - [ ] Expose engine prometheus metrics via http server
