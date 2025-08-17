@@ -1,4 +1,4 @@
-use crate::{checkpointer, sink::handle::Sink, state::event::Event};
+use crate::{checkpointer, live::sink::handle::Sink, live::state::event::Event};
 use eyre::Result;
 use std::fmt::Debug;
 use std::sync::Arc;

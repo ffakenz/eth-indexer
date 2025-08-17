@@ -2,7 +2,7 @@ use alloy::primitives::BlockNumber;
 use eyre::Result;
 use futures_util::stream::BoxStream;
 
-use crate::source::filter::{ChunkFilter, StreamFilter};
+use crate::live::source::filter::{ChunkFilter, StreamFilter};
 
 pub trait SourceInput {
     fn block_number(&self) -> Option<BlockNumber>;

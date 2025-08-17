@@ -3,8 +3,8 @@ use chain::rpc::NodeClient;
 use engine::{
     args::Args,
     engine::Engine,
-    sink::{handle::Sink, transfer::TransferSink},
-    source::{handle::Source, log::LogSource},
+    live::sink::{handle::Sink, transfer::TransferSink},
+    live::source::{handle::Source, log::LogSource},
 };
 use eyre::Result;
 use std::{str::FromStr, sync::Arc};

@@ -1,8 +1,8 @@
 use crate::args::Args;
 use crate::checkpointer;
-use crate::sink::handle::Sink;
-use crate::source::filter::ChunkFilter;
-use crate::source::handle::{Source, SourceInput};
+use crate::live::sink::handle::Sink;
+use crate::live::source::filter::ChunkFilter;
+use crate::live::source::handle::{Source, SourceInput};
 use alloy::primitives::BlockNumber;
 use alloy::rpc::types::Block;
 use chain::rpc::NodeClient;
