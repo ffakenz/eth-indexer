@@ -5,7 +5,7 @@ APP_PID=""
 
 cleanup_all() {
   echo "Stopping all dangling engine processes..."
-  pkill -9 -f "target/debug/cli engine" || true
+  pkill -9 -f "target/debug/eth-indexer engine" || true
 }
 
 # whenever this script exits for any reason,
@@ -17,7 +17,6 @@ cleanup() {
       if kill -0 "$APP_PID" 2>/dev/null; then
         echo "Stopping engine (pid=$APP_PID)..."
         kill "$APP_PID" || true
-        wait "$APP_PID" || true
       fi
   fi
 }
@@ -31,7 +30,9 @@ healthcheck() {
 }
 
 # -- PREPARE TEST ---
-make demo.setup
+make -s build
+
+make -s demo.setup
 
 # Load environment variables
 ENV_FILE="$(dirname "$0")/.dev-env"
@@ -70,13 +71,14 @@ fi
 # -- START TEST ---
 
 # simulate historical activity
-make demo.play
+make -s demo.play
 
 # start engine on background, pipeing logs
-make demo.engine >"$LOG_FILE" 2>&1 &
+make -s demo.engine >"$LOG_FILE" 2>&1 &
+
 # give it a moment to spawn
 sleep 1
-APP_PID=$(pgrep -f "target/debug/cli engine" | head -n1)
+APP_PID=$(pgrep -f "target/debug/eth-indexer engine" | head -n1)
 echo "Engine pid=$APP_PID"
 # wait a bit and check process still alive
 sleep 1
@@ -86,7 +88,7 @@ healthcheck
 sleep 1
 
 # simulate live activity
-make demo.play
+make -s demo.play
 
 # wait for engine to process
 sleep 1
@@ -95,5 +97,5 @@ sleep 1
 cleanup
 
 # query engine outcomes
-make demo.query.checkpoint | jq
-make demo.query.transfer | jq
+make -s demo.query.checkpoint 2>/dev/null | jq
+make -s demo.query.transfer 2>/dev/null | jq

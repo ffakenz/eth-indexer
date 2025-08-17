@@ -71,7 +71,7 @@ demo.engine: ## Start the engine to watch demo contract
 		--addresses "$$CONTRACT_ADDR" \
 		--event transfer \
 		--from-block "$$BLOCK_NBR" \
-		--checkpoint-interval 10 \
+		--checkpoint-interval 12 \
 		--poll-interval 100
 
 demo.query.checkpoint: ## Run engine query to select checkpoint outcomes
