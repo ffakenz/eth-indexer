@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+          # - beta
+          # - nightly
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Ensure cache directories exist
+      run: |
+        mkdir -p \
+          ~/.rustup/toolchains \
+          ~/.cargo/registry \
+          ~/.cargo/cargo-audit \
+          ~/.cargo/git
+
+    # -------------------
+    # Rust toolchain cache
+    # -------------------
+    - name: Restore Rust toolchain cache
+      id: cache-rustup
+      uses: actions/cache/restore@v3
+      with:
+        path: ~/.rustup/toolchains
+        key: rust-toolchain-${{ matrix.toolchain }}-${{ runner.os }}
+
+    - name: Save Rust toolchain cache
+      if: always() && steps.cache-rustup.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v3
+      with:
+        path: ~/.rustup/toolchains
+        key: rust-toolchain-${{ matrix.toolchain }}-${{ runner.os }}
+
+    # -------------------
+    # Cargo registry/git cache
+    # -------------------
+    - name: Restore Cargo cache
+      id: cache-cargo
+      uses: actions/cache/restore@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Save Cargo cache
+      if: always() && steps.cache-cargo.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    # -------------------
+    # Cargo-audit cache
+    # -------------------
+    - name: Restore cargo-audit cache
+      id: cache-audit
+      uses: actions/cache/restore@v3
+      with:
+        path: ~/.cargo/cargo-audit
+        key: cargo-audit-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Save cargo-audit cache
+      if: always() && steps.cache-audit.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v3
+      with:
+        path: ~/.cargo/cargo-audit
+        key: cargo-audit-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+    # -------------------
+    # Install steps
+    # -------------------
+    - name: Install Rust toolchain (if not cached)
+      if: steps.cache-rustup.outputs.cache-hit != 'true'
+      run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+
+    - name: Install cargo-audit (if not cached)
+      if: steps.cache-audit.outputs.cache-hit != 'true'
+      run: |
+        cargo install cargo-audit --locked --root $HOME/.cargo/cargo-audit
+
+    - name: Add cargo-audit to PATH
+      run: echo "$HOME/.cargo/cargo-audit/bin" >> $GITHUB_PATH
+
+    - name: Install Foundry
+      uses: foundry-rs/foundry-toolchain@v1
+      with:
+        cache: true
+        version: stable
+        cache-key: foundry-${{ github.sha }}
+        cache-restore-keys: |
+          foundry-
+
+    - name: Verify installed tools
+      run: |
+        rustc --version
+        cargo --version
+        cargo-audit --version
+        forge --version
+        anvil --version
+
+    # -------------------
+    # CI steps
+    # -------------------
+    - name: Build
+      run: make build
+
+    - name: Check / Clippy / Test
+      run: make check
+
+    - name: Audit
+      run: cargo audit
+
+    - name: e2e
+      run: |
+        nohup anvil --block-time 5 > anvil.log 2>&1 &
+        sleep 5
+        make demo.test
+
+    # -------------------
+    # Upload artifacts
+    # -------------------
+    - name: Upload Anvil log
+      uses: actions/upload-artifact@v4
+      with:
+        name: anvil-log
+        path: anvil.log
+        if-no-files-found: ignore
+
+    - name: Upload demo-engine log
+      uses: actions/upload-artifact@v4
+      with:
+        name: demo-engine-log
+        path: resources/tests/demo/demo-engine.log
+        if-no-files-found: ignore
+
+    - name: Install eth-indexer binary
+      run: cargo install --path ./app/cli --bin eth-indexer
+
+    - name: Upload CLI binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: eth-indexer
+        path: target/install/bin/eth-indexer
+        if-no-files-found: ignore
