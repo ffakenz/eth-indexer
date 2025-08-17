@@ -112,10 +112,10 @@ impl NodeClient {
             .map(|block_provider| block_provider.with_poll_interval(poll_interval).into_stream())
     }
 
-    pub async fn watch_full_blocks(
-        &self,
+    pub async fn watch_full_blocks<'a>(
+        &'a self,
         poll_interval: Duration,
-    ) -> Result<BoxStream<Result<Block, RpcError<TransportErrorKind>>>> {
+    ) -> Result<BoxStream<'a, Result<Block, RpcError<TransportErrorKind>>>> {
         let mut watcher = self.provider.watch_full_blocks().await?;
         watcher.set_poll_interval(poll_interval);
         Ok(watcher.into_stream().boxed())
