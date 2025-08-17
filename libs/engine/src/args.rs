@@ -14,7 +14,7 @@ pub struct Args {
     // Event filter to watch
     pub event: EventType,
     // Latest known block that has been checkpointed
-    pub from_block: BlockNumber,
+    pub from_block: Option<BlockNumber>,
     // Positive number of events handled between checkpoints
     pub checkpoint_interval: u64,
     // Throttling (rate-limit) node requests:

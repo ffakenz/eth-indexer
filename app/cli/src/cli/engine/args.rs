@@ -27,8 +27,8 @@ pub struct Args {
     pub event: CliEventType,
 
     /// From block number to watch
-    #[arg(long, default_value_t = 0)]
-    pub from_block: u64,
+    #[arg(long)]
+    pub from_block: Option<u64>,
 
     /// Checkpoint interval
     #[arg(long, default_value_t = 100)]

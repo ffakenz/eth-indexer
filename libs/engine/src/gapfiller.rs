@@ -31,7 +31,14 @@ where
     let latest_block_number: BlockNumber = latest_block.number();
 
     // Local mut state
-    let mut checkpoint_number: BlockNumber = args.from_block;
+    let mut checkpoint_number: BlockNumber = match args.from_block {
+        Some(from_block_number) => from_block_number,
+        None => match checkpoint_store.get_last_checkpoint().await? {
+            Some(checkpoint_block) => checkpoint_block.block_number as u64,
+            // start from the tip
+            None => latest_block_number,
+        },
+    };
 
     tracing::info!("Backfill started at block number: {checkpoint_number:?}");
 

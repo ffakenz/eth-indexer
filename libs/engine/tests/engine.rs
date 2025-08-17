@@ -104,7 +104,7 @@ mod tests {
         let args = engine::args::Args {
             addresses: ValueOrArray::Value(*contract.address()),
             event: EventType::Transfer,
-            from_block: start_block.number(),
+            from_block: Some(start_block.number()),
             checkpoint_interval: 4,
             poll_interval: Duration::from_millis(100),
         };
@@ -154,11 +154,10 @@ mod tests {
         println!("✅ Transfer event and balances verified");
 
         // Re-start the engine
-        let latest_checkpoint = checkpoint_store.get_last_checkpoint().await?.unwrap();
         let args = engine::args::Args {
             addresses: ValueOrArray::Value(*contract.address()),
             event: EventType::Transfer,
-            from_block: latest_checkpoint.block_number as u64,
+            from_block: None,
             checkpoint_interval: 1,
             poll_interval: Duration::from_millis(100),
         };
