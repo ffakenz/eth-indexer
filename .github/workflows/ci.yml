@@ -63,6 +63,8 @@ jobs:
         key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Fetch dependencies
+      # REVIEW!
+      # if: steps.cache-cargo.outputs.cache-hit != 'true'
       run: cargo fetch
 
     - name: Save Cargo cache
@@ -133,9 +135,9 @@ jobs:
     - name: Audit
       run: cargo audit
 
-    - name: e2e
+    - name: demo e2e
       run: |
-        nohup anvil --block-time 5 > anvil.log 2>&1 &
+        nohup anvil --block-time 5 > demo-anvil.log 2>&1 &
         ANVIL_PID=$!
         sleep 5
         make demo.test
@@ -144,14 +146,14 @@ jobs:
     # -------------------
     # Upload artifacts
     # -------------------
-    - name: Upload Anvil log
+    - name: Upload demo Anvil log
       uses: actions/upload-artifact@v4
       with:
-        name: anvil-log
-        path: anvil.log
+        name: demo-anvil-log
+        path: demo-anvil.log
         if-no-files-found: ignore
 
-    - name: Upload demo-engine log
+    - name: Upload demo Engine log
       uses: actions/upload-artifact@v4
       with:
         name: demo-engine-log

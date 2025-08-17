@@ -17,6 +17,8 @@ pub struct Args {
     pub from_block: Option<BlockNumber>,
     // Positive number of events handled between checkpoints
     pub checkpoint_interval: u64,
+    // Positive number of events handled between checkpoints
+    pub backfill_checkpoint_interval: Option<u64>,
     // Throttling (rate-limit) node requests:
     // minimum time to wait between consecutive calls
     pub poll_interval: Duration,

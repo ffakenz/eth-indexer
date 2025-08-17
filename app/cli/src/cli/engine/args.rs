@@ -30,9 +30,13 @@ pub struct Args {
     #[arg(long)]
     pub from_block: Option<u64>,
 
-    /// Checkpoint interval
-    #[arg(long, default_value_t = 100)]
+    /// Checkpoint interval during live watch
+    #[arg(long, default_value_t = 12)]
     pub checkpoint_interval: u64,
+
+    /// Checkpoint interval during backfill
+    #[arg(long)]
+    pub backfill_checkpoint_interval: Option<u64>,
 
     /// Poll interval in milliseconds
     #[arg(long, default_value_t = 500)]

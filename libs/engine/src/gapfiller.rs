@@ -30,6 +30,11 @@ where
 
     let latest_block_number: BlockNumber = latest_block.number();
 
+    let checkpoint_interval = match args.backfill_checkpoint_interval {
+        None => args.checkpoint_interval,
+        Some(backfill_checkpoint_interval) => backfill_checkpoint_interval,
+    };
+
     // Local mut state
     let mut checkpoint_number: BlockNumber = match args.from_block {
         Some(from_block_number) => from_block_number,
@@ -46,7 +51,7 @@ where
     while checkpoint_number <= latest_block_number {
         // A safe checked addition avoids silent wraparound
         let chunk_block_number =
-            checkpoint_number.saturating_add(args.checkpoint_interval - 1).min(latest_block_number);
+            checkpoint_number.saturating_add(checkpoint_interval - 1).min(latest_block_number);
 
         // Fetch latest processed block to have it ready to build checkpoint a checkpoint
         // as soon as we complete processing logs.

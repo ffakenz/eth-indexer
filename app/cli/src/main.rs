@@ -37,6 +37,7 @@ async fn main() -> Result<()> {
                 from_block: args.from_block,
                 poll_interval: Duration::from_millis(args.poll_interval),
                 checkpoint_interval: args.checkpoint_interval,
+                backfill_checkpoint_interval: args.backfill_checkpoint_interval,
             };
             cli::engine::run::start(&args.rpc_url, &args.db_url, &args.signer_pk, start_args).await
         }

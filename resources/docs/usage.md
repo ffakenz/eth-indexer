@@ -11,13 +11,14 @@ Run the indexer to watch for transfer events
 
 ```sh
 # options:
-# --rpc-url             → evm-node JSON-RPC endpoint
-# --db-url              → SQLite connection string
-# --signer-pk           → user signing private key
-# --addresses           → contract(s) to index
-# --event               → supported event types (`transfer`)
-# --checkpoint-interval → snapshot frequency
-# --poll-interval       → node polling interval (ms)
+# --rpc-url                         → evm-node JSON-RPC endpoint
+# --db-url                          → SQLite connection string
+# --signer-pk                       → user signing private key
+# --addresses                       → contract(s) to index
+# --event                           → supported event types (`transfer`)
+# --checkpoint-interval             → snapshot frequency during live watch
+# --backfill-checkpoint-interval    → snapshot frequency during during backfill
+# --poll-interval                   → node polling interval (ms)
 eth-indexer engine \
     --rpc-url "$RPC_URL" \
     --db-url "sqlite:$DB_FILE" \

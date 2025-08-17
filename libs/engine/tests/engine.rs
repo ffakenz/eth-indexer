@@ -106,6 +106,7 @@ mod tests {
             event: EventType::Transfer,
             from_block: Some(start_block.number()),
             checkpoint_interval: 4,
+            backfill_checkpoint_interval: None,
             poll_interval: Duration::from_millis(100),
         };
         let engine = Engine::start(
@@ -159,6 +160,7 @@ mod tests {
             event: EventType::Transfer,
             from_block: None,
             checkpoint_interval: 1,
+            backfill_checkpoint_interval: None,
             poll_interval: Duration::from_millis(100),
         };
         let restarted_engine = Engine::start(
