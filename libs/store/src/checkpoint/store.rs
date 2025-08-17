@@ -4,6 +4,7 @@ use alloy::primitives::{BlockHash, BlockNumber};
 use eyre::Result;
 use sqlx::Error;
 
+#[derive(Clone)]
 pub struct Store {
     client: Client,
 }

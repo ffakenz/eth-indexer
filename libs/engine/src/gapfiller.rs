@@ -8,16 +8,15 @@ use alloy::rpc::types::Block;
 use chain::rpc::NodeClient;
 use eyre::{Result, eyre};
 use std::fmt::Debug;
-use std::sync::Arc;
 use store::checkpoint::model::Checkpoint;
 use store::checkpoint::store::Store as CheckpointStore;
 
 pub async fn chunked_backfill<E, T>(
     args: &Args,
     node_client: &NodeClient,
-    source: Arc<dyn Source<Item = E>>,
-    checkpoint_store: Arc<CheckpointStore>,
-    sink: Arc<dyn Sink<Item = T>>,
+    source: &dyn Source<Item = E>,
+    checkpoint_store: &CheckpointStore,
+    sink: &dyn Sink<Item = T>,
 ) -> Result<Checkpoint>
 where
     E: SourceInput + Debug + Clone,
@@ -85,7 +84,7 @@ where
             sink.process_batch(&elements).await?;
         }
 
-        match checkpointer::save_checkpoint(&chunk_checkpoint_block, &checkpoint_store).await {
+        match checkpointer::save_checkpoint(&chunk_checkpoint_block, checkpoint_store).await {
             Ok(success) => success,
             Err(e) => {
                 tracing::error!("Backfill failed on [save_checkpoint]: {e:?}");

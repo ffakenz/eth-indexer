@@ -17,13 +17,13 @@ pub async fn start(rpc_url: &str, db_url: &str, signer_pk: &str, engine_args: Ar
         Arc::new(LogSource { node_client: node_client.clone() });
 
     let client = Client::init(db_url).await?;
-    let checkpoint_store = Arc::new(store::checkpoint::store::Store::new(client.clone()));
+    let checkpoint_store = store::checkpoint::store::Store::new(client.clone());
     let transfer_store = store::transfer::store::Store::new(client.clone());
     let sink: Arc<dyn Sink<Item = Transfer>> = Arc::new(TransferSink { store: transfer_store });
 
     tracing::info!("Starting the engine {engine_args:?}");
 
-    let engine = Engine::start(&engine_args, &node_client, source, checkpoint_store, sink).await?;
+    let engine = Engine::start(&engine_args, &node_client, source, &checkpoint_store, sink).await?;
 
     // Wait for user to request shutdown (SIGINT)
     tokio::signal::ctrl_c().await?;

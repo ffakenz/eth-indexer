@@ -38,7 +38,7 @@ impl Engine {
         args: &Args,
         node_client: &NodeClient,
         source: Arc<dyn Source<Item = E>>,
-        checkpoint_store: Arc<CheckpointStore>,
+        checkpoint_store: &CheckpointStore,
         sink: Arc<dyn Sink<Item = T>>,
     ) -> Result<Engine>
     where
@@ -51,9 +51,9 @@ impl Engine {
         let checkpoint = gapfiller::chunked_backfill(
             args,
             node_client,
-            Arc::clone(&source),
-            Arc::clone(&checkpoint_store),
-            Arc::clone(&sink),
+            source.as_ref(),
+            checkpoint_store,
+            sink.as_ref(),
         )
         .await?;
 
@@ -67,7 +67,7 @@ impl Engine {
         let consumer_handle = subscriber::spawn_event_consumer(
             rx,
             shutdown_tx.clone(),
-            Arc::clone(&checkpoint_store),
+            Arc::new(checkpoint_store.clone()),
             Arc::clone(&sink),
         )
         .await;

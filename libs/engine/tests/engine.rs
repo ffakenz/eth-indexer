@@ -113,7 +113,7 @@ mod tests {
             &args,
             &node_client,
             Arc::clone(&transfer_source),
-            Arc::clone(&checkpoint_store),
+            &checkpoint_store,
             Arc::clone(&transfer_sink),
         )
         .await?;
@@ -167,7 +167,7 @@ mod tests {
             &args,
             &node_client,
             Arc::clone(&transfer_source),
-            Arc::clone(&checkpoint_store),
+            &checkpoint_store,
             Arc::clone(&transfer_sink),
         )
         .await?;
