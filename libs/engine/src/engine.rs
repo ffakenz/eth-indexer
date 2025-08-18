@@ -1,6 +1,6 @@
 use crate::args::Args;
 use crate::checkpointer::Checkpointer;
-use crate::gapfiller;
+use crate::gapfiller::Gapfiller;
 use crate::live::pubsub::{publisher, subscriber};
 use crate::live::sink::handle::Sink;
 use crate::live::source::handle::{Source, SourceInput};
@@ -47,19 +47,12 @@ impl Engine {
         T: Outcome + TryFrom<E> + Debug + Send + Sync + 'static,
     {
         // Run collect elements in chunks sync (gap-fill)
-
-        let checkpoint = gapfiller::chunked_backfill(
-            args,
-            node_client,
-            source.as_ref(),
-            checkpointer,
-            sink.as_ref(),
-        )
-        .await?;
+        let gapfiller = Gapfiller::new(node_client, source.as_ref(), checkpointer, sink.as_ref());
+        let checkpoint = gapfiller.chunked_backfill(args).await?;
 
         let state = State::new((checkpoint.block_number + 1) as u64);
 
-        // Run collect elements live async
+        // Run collect elements live async (live-watcher)
         let (tx, rx) = mpsc::channel::<Result<Event<T>>>(channel_size(args));
 
         let (shutdown_tx, _) = broadcast::channel::<()>(1);
