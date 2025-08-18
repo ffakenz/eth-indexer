@@ -1,7 +1,7 @@
 use crate::args::Args;
 use crate::live::source::filter::StreamFilter;
 use crate::live::source::handle::{Source, SourceInput};
-use crate::live::state::event::Event;
+use crate::live::state::event::Events;
 use crate::live::state::logic::State;
 use crate::live::state::outcome::Outcome;
 use chain::rpc::NodeClient;
@@ -12,15 +12,10 @@ use std::sync::Arc;
 use sync::producer::Producer;
 use tokio::sync::{Mutex, broadcast, mpsc};
 
-pub async fn with_state<S, R>(state: &Arc<Mutex<S>>, f: impl FnOnce(&mut S) -> R) -> R {
-    let mut locked = state.lock().await;
-    f(&mut locked)
-}
-
 pub async fn spawn_event_producer<E, T>(
     args: &Args,
     state: State,
-    tx: mpsc::Sender<Result<Event<T>>>,
+    tx: mpsc::Sender<Result<Events<T>>>,
     shutdown_tx: broadcast::Sender<()>,
     node_client: Arc<NodeClient>,
     source: Arc<dyn Source<Item = E>>,
@@ -52,23 +47,22 @@ where
         let node_client_for_producer = Arc::clone(&node_client);
         let state_for_producer = Arc::clone(&shared_state);
         async move {
-            let (do_checkpoint, checkpoint_block_number) =
-                state_for_producer.lock().await.checkpoint_decision(checkpoint_interval);
-            if do_checkpoint {
-                tracing::info!("Publisher checkpointing: {checkpoint_block_number:?}");
-                let maybe_checkpoint_block =
-                    node_client_for_producer.get_block_by_number(checkpoint_block_number).await?;
-                with_state(&state_for_producer, |s| s.on_checkpoint(maybe_checkpoint_block)).await
-            } else {
-                match inputs_stream_for_producer.lock().await.next().await {
-                    Some(input) => {
-                        tracing::info!("Publisher rolling forward: {input:?}");
-                        with_state(&state_for_producer, |s| s.on_input(input)).await
-                    }
-                    None => {
-                        tracing::error!("Stream ended");
-                        Err(eyre!("Stream ended"))
-                    }
+            match inputs_stream_for_producer.lock().await.next().await {
+                Some(input) => {
+                    tracing::info!("Publisher rolling forward: {input:?}");
+                    state_for_producer
+                        .lock()
+                        .await
+                        .on_roll_forward(
+                            input,
+                            checkpoint_interval,
+                            node_client_for_producer.as_ref(),
+                        )
+                        .await
+                }
+                None => {
+                    tracing::error!("Stream ended");
+                    Err(eyre!("Stream ended"))
                 }
             }
         }

@@ -4,7 +4,7 @@ use crate::gapfiller::Gapfiller;
 use crate::live::pubsub::{publisher, subscriber};
 use crate::live::sink::handle::Sink;
 use crate::live::source::handle::{Source, SourceInput};
-use crate::live::state::event::Event;
+use crate::live::state::event::Events;
 use crate::live::state::logic::State;
 use crate::live::state::outcome::Outcome;
 use chain::rpc::NodeClient;
@@ -53,7 +53,7 @@ impl Engine {
         let state = State::new((checkpoint.block_number + 1) as u64);
 
         // Run collect elements live async (live-watcher)
-        let (tx, rx) = mpsc::channel::<Result<Event<T>>>(channel_size(args));
+        let (tx, rx) = mpsc::channel::<Result<Events<T>>>(channel_size(args));
 
         let (shutdown_tx, _) = broadcast::channel::<()>(1);
 

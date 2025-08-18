@@ -6,3 +6,6 @@ pub enum Event<T> {
     Element(Box<T>),
     Checkpoint(Box<Block>),
 }
+
+#[derive(Debug)]
+pub struct Events<T>(pub Vec<Event<T>>);
