@@ -14,7 +14,7 @@ use tokio::sync::{Mutex, broadcast, mpsc};
 
 pub async fn spawn_event_producer<E, T>(
     args: &Args,
-    state: State,
+    shared_state: Arc<Mutex<State>>,
     tx: mpsc::Sender<Result<Events<T>>>,
     shutdown_tx: broadcast::Sender<()>,
     node_client: Arc<NodeClient>,
@@ -30,7 +30,7 @@ where
     let stream_filter = StreamFilter {
         addresses: args.addresses.clone(),
         event: args.event.clone(),
-        from_block_number: state.get_next_checkpoint_block_number().into(),
+        from_block_number: shared_state.lock().await.get_current_block_number().into(),
         poll_interval: args.poll_interval,
     };
     let inputs_stream = source.stream(stream_filter).await?;
@@ -39,7 +39,6 @@ where
     // * Arc, allows sharing across async tasks/closures.
     // * Mutex, gives async mutable access:
     let shared_inputs_stream = Arc::new(Mutex::new(inputs_stream));
-    let shared_state = Arc::new(Mutex::new(state));
 
     // A closure that returns a future
     let producer_callback = move || {
@@ -53,11 +52,7 @@ where
                     state_for_producer
                         .lock()
                         .await
-                        .on_roll_forward(
-                            input,
-                            checkpoint_interval,
-                            node_client_for_producer.as_ref(),
-                        )
+                        .roll_forward(input, checkpoint_interval, node_client_for_producer.as_ref())
                         .await
                 }
                 None => {

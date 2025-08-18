@@ -1,4 +1,3 @@
-use alloy::rpc::types::Block;
 use eyre::{Result, eyre};
 use store::checkpoint::model::Checkpoint;
 use store::checkpoint::store::Store as CheckpointStore;
@@ -17,15 +16,10 @@ impl Checkpointer {
         self.store.get_last_checkpoint().await.map_err(|e| eyre!(e))
     }
 
-    pub async fn checkpoint(&self, checkpoint_block: &Block) -> Result<()> {
-        let block_number = checkpoint_block.number();
-        let block_hash = checkpoint_block.hash();
-        let checkpoint: Checkpoint = checkpoint_block.into();
-        match self.store.insert_checkpoint(&checkpoint).await {
+    pub async fn checkpoint(&self, checkpoint: &Checkpoint) -> Result<()> {
+        match self.store.insert_checkpoint(checkpoint).await {
             Ok(_) => {
-                tracing::info!(
-                    "Checkpoint saved at block number {block_number:?} and hash {block_hash:?}"
-                );
+                tracing::info!("Checkpoint saved {checkpoint:?}");
                 Ok(())
             }
             Err(e) => {

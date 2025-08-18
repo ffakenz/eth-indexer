@@ -5,13 +5,14 @@ use crate::live::pubsub::{publisher, subscriber};
 use crate::live::sink::handle::Sink;
 use crate::live::source::handle::{Source, SourceInput};
 use crate::live::state::event::Events;
-use crate::live::state::logic::State;
+use crate::live::state::logic;
 use crate::live::state::outcome::Outcome;
+use alloy::rpc::types::Block;
 use chain::rpc::NodeClient;
-use eyre::Result;
+use eyre::{Result, eyre};
 use std::fmt::Debug;
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{Mutex, broadcast, mpsc};
 use tokio::task::JoinHandle;
 
 pub struct Engine {
@@ -46,11 +47,17 @@ impl Engine {
         <E as TryInto<T>>::Error: Debug + Send + Sync + 'static,
         T: Outcome + TryFrom<E> + Debug + Send + Sync + 'static,
     {
+        // Lookup latest block
+        let block_tip: Block =
+            node_client.get_latest_block().await?.ok_or_else(|| eyre!("Latest block not found"))?;
+        let tip_number = block_tip.number();
+        tracing::info!("Engine started at block tip number: {tip_number:?}");
+
+        let mut state = logic::init_state(&block_tip, args.from_block, checkpointer).await?;
+
         // Run collect elements in chunks sync (gap-fill)
         let gapfiller = Gapfiller::new(node_client, source.as_ref(), checkpointer, sink.as_ref());
-        let checkpoint = gapfiller.chunked_backfill(args).await?;
-
-        let state = State::new(checkpoint.block_number as u64);
+        gapfiller.chunked_backfill(args, block_tip, &mut state).await?;
 
         // Run collect elements live async (live-watcher)
         let (tx, rx) = mpsc::channel::<Result<Events<T>>>(channel_size(args));
@@ -65,9 +72,14 @@ impl Engine {
         )
         .await;
 
+        // Wrap in a Arc + Mutex for interior mutability.
+        // * Arc, allows sharing across async tasks/closures.
+        // * Mutex, gives async mutable access:
+        let shared_state = Arc::new(Mutex::new(state));
+
         let producer_handle = publisher::spawn_event_producer(
             args,
-            state,
+            shared_state,
             tx,
             shutdown_tx.clone(),
             Arc::new(node_client.clone()),

@@ -11,9 +11,10 @@ pub async fn select(query: &Query) -> Result<()> {
 
     let from_block_number = match query.from_block {
         FromBlock::Number(block_number) => Ok(block_number),
-        FromBlock::Last => match checkpoint_store.get_last_checkpoint().await? {
-            None => Err(eyre!("Last Checkpoint Not Found")),
-            Some(checkpoint) => Ok(checkpoint.block_number as u64),
+        FromBlock::Last => match checkpoint_store.get_last_checkpoint().await {
+            Ok(Some(checkpoint)) => Ok(checkpoint.block_number as u64),
+            Ok(None) => Err(eyre!("Last Checkpoint Not Found")),
+            Err(e) => Err(eyre!(e)),
         },
     };
 

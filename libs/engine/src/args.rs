@@ -13,7 +13,9 @@ pub struct Args {
     pub addresses: ValueOrArray<Address>,
     // Event filter to watch
     pub event: EventType,
-    // Latest known block that has been checkpointed
+    // Block from which start indexing.
+    // If not provided, the engine starts at
+    // latest known block that has been checkpointed
     pub from_block: Option<BlockNumber>,
     // Positive number of blocks handled between checkpoints
     pub checkpoint_interval: u64,
