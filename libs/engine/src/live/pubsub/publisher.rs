@@ -21,8 +21,8 @@ pub async fn spawn_event_producer<E, T>(
     source: Arc<dyn Source<Item = E>>,
 ) -> Result<tokio::task::JoinHandle<()>>
 where
-    E: SourceInput + Clone + Debug + Send + Sync + 'static,
-    <E as TryInto<T>>::Error: Debug,
+    E: SourceInput + TryInto<T> + Clone + Debug + Send + Sync + 'static,
+    <E as TryInto<T>>::Error: Debug + Send + Sync + 'static,
     T: Outcome + TryFrom<E> + Send + Sync + 'static,
 {
     let checkpoint_interval = args.checkpoint_interval;

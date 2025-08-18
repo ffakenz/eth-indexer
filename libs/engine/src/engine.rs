@@ -43,14 +43,14 @@ impl Engine {
     ) -> Result<Engine>
     where
         E: SourceInput + Debug + Clone + Send + Sync + 'static,
-        <E as TryInto<T>>::Error: Debug,
+        <E as TryInto<T>>::Error: Debug + Send + Sync + 'static,
         T: Outcome + TryFrom<E> + Debug + Send + Sync + 'static,
     {
         // Run collect elements in chunks sync (gap-fill)
         let gapfiller = Gapfiller::new(node_client, source.as_ref(), checkpointer, sink.as_ref());
         let checkpoint = gapfiller.chunked_backfill(args).await?;
 
-        let state = State::new((checkpoint.block_number + 1) as u64);
+        let state = State::new(checkpoint.block_number as u64);
 
         // Run collect elements live async (live-watcher)
         let (tx, rx) = mpsc::channel::<Result<Events<T>>>(channel_size(args));
