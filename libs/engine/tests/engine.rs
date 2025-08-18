@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use alloy::rpc::types::{Log, ValueOrArray};
+    use engine::checkpointer::Checkpointer;
     use engine::engine::Engine;
     use engine::live::sink::{handle::Sink, transfer::TransferSink};
     use engine::live::source::filter::EventType;
@@ -40,7 +41,8 @@ mod tests {
         // Init SQLite store
         let db_url = "sqlite::memory:";
         let client = Client::init(db_url).await?;
-        let checkpoint_store = Arc::new(CheckpointStore::new(client.clone()));
+        let checkpoint_store = CheckpointStore::new(client.clone());
+        let checkpointer = Arc::new(Checkpointer::new(checkpoint_store));
         let transfer_store = TransferStore::new(client.clone());
         let transfer_sink: Arc<dyn Sink<Item = Transfer>> =
             Arc::new(TransferSink { store: TransferStore::new(client.clone()) });
@@ -113,7 +115,7 @@ mod tests {
             &args,
             &node_client,
             Arc::clone(&transfer_source),
-            &checkpoint_store,
+            &checkpointer,
             Arc::clone(&transfer_sink),
         )
         .await?;
@@ -167,7 +169,7 @@ mod tests {
             &args,
             &node_client,
             Arc::clone(&transfer_source),
-            &checkpoint_store,
+            &checkpointer,
             Arc::clone(&transfer_sink),
         )
         .await?;

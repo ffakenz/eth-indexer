@@ -1,5 +1,5 @@
 use crate::args::Args;
-use crate::checkpointer;
+use crate::checkpointer::Checkpointer;
 use crate::live::sink::handle::Sink;
 use crate::live::source::filter::ChunkFilter;
 use crate::live::source::handle::{Source, SourceInput};
@@ -9,13 +9,12 @@ use chain::rpc::NodeClient;
 use eyre::{Result, eyre};
 use std::fmt::Debug;
 use store::checkpoint::model::Checkpoint;
-use store::checkpoint::store::Store as CheckpointStore;
 
 pub async fn chunked_backfill<E, T>(
     args: &Args,
     node_client: &NodeClient,
     source: &dyn Source<Item = E>,
-    checkpoint_store: &CheckpointStore,
+    checkpointer: &Checkpointer,
     sink: &dyn Sink<Item = T>,
 ) -> Result<Checkpoint>
 where
@@ -37,7 +36,7 @@ where
     // Local mut state
     let mut checkpoint_number: BlockNumber = match args.from_block {
         Some(from_block_number) => from_block_number,
-        None => match checkpoint_store.get_last_checkpoint().await? {
+        None => match checkpointer.get_last_checkpoint().await? {
             Some(checkpoint_block) => checkpoint_block.block_number as u64,
             // start from the tip
             None => latest_block_number,
@@ -84,7 +83,7 @@ where
             sink.process_batch(&elements).await?;
         }
 
-        match checkpointer::save_checkpoint(&chunk_checkpoint_block, checkpoint_store).await {
+        match checkpointer.checkpoint(&chunk_checkpoint_block).await {
             Ok(success) => success,
             Err(e) => {
                 tracing::error!("Backfill failed on [save_checkpoint]: {e:?}");

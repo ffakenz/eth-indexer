@@ -2,9 +2,12 @@ use alloy::{rpc::types::Log, signers::local::PrivateKeySigner, transports::http:
 use chain::rpc::NodeClient;
 use engine::{
     args::Args,
+    checkpointer::Checkpointer,
     engine::Engine,
-    live::sink::{handle::Sink, transfer::TransferSink},
-    live::source::{handle::Source, log::LogSource},
+    live::{
+        sink::{handle::Sink, transfer::TransferSink},
+        source::{handle::Source, log::LogSource},
+    },
 };
 use eyre::Result;
 use std::{str::FromStr, sync::Arc};
@@ -18,12 +21,13 @@ pub async fn start(rpc_url: &str, db_url: &str, signer_pk: &str, engine_args: Ar
 
     let client = Client::init(db_url).await?;
     let checkpoint_store = store::checkpoint::store::Store::new(client.clone());
+    let checkpointer = Checkpointer::new(checkpoint_store);
     let transfer_store = store::transfer::store::Store::new(client.clone());
     let sink: Arc<dyn Sink<Item = Transfer>> = Arc::new(TransferSink { store: transfer_store });
 
     tracing::info!("Starting the engine {engine_args:?}");
 
-    let engine = Engine::start(&engine_args, &node_client, source, &checkpoint_store, sink).await?;
+    let engine = Engine::start(&engine_args, &node_client, source, &checkpointer, sink).await?;
 
     // Wait for user to request shutdown (SIGINT)
     tokio::signal::ctrl_c().await?;

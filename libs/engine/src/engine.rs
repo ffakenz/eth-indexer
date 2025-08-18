@@ -1,4 +1,5 @@
 use crate::args::Args;
+use crate::checkpointer::Checkpointer;
 use crate::gapfiller;
 use crate::live::pubsub::{publisher, subscriber};
 use crate::live::sink::handle::Sink;
@@ -10,7 +11,6 @@ use chain::rpc::NodeClient;
 use eyre::Result;
 use std::fmt::Debug;
 use std::sync::Arc;
-use store::checkpoint::store::Store as CheckpointStore;
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
 
@@ -38,7 +38,7 @@ impl Engine {
         args: &Args,
         node_client: &NodeClient,
         source: Arc<dyn Source<Item = E>>,
-        checkpoint_store: &CheckpointStore,
+        checkpointer: &Checkpointer,
         sink: Arc<dyn Sink<Item = T>>,
     ) -> Result<Engine>
     where
@@ -52,7 +52,7 @@ impl Engine {
             args,
             node_client,
             source.as_ref(),
-            checkpoint_store,
+            checkpointer,
             sink.as_ref(),
         )
         .await?;
@@ -67,7 +67,7 @@ impl Engine {
         let consumer_handle = subscriber::spawn_event_consumer(
             rx,
             shutdown_tx.clone(),
-            Arc::new(checkpoint_store.clone()),
+            Arc::new(checkpointer.clone()),
             Arc::clone(&sink),
         )
         .await;
