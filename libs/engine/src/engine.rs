@@ -1,6 +1,6 @@
 use crate::args::Args;
 use crate::checkpointer::Checkpointer;
-use crate::gapfiller::Gapfiller;
+use crate::gapfiller;
 use crate::live::pubsub::{publisher, subscriber};
 use crate::live::sink::handle::Sink;
 use crate::live::source::handle::{Source, SourceInput};
@@ -53,13 +53,62 @@ impl Engine {
         let tip_number = block_tip.number();
         tracing::info!("Engine started at block tip number: {tip_number:?}");
 
-        let mut state = logic::init_state(&block_tip, args.from_block, checkpointer).await?;
+        let state = logic::init_state(&block_tip, args.from_block, checkpointer).await?;
 
-        // Run collect elements in chunks sync (gap-fill)
-        let gapfiller = Gapfiller::new(node_client, source.as_ref(), checkpointer, sink.as_ref());
-        gapfiller.chunked_backfill(args, block_tip, &mut state).await?;
+        // Wrap in a Arc + Mutex for interior mutability.
+        // * Arc, allows sharing across async tasks/closures.
+        // * Mutex, gives async mutable access:
+        let shared_state = Arc::new(Mutex::new(state));
 
-        // Run collect elements live async (live-watcher)
+        // 1. Run collect elements in chunks async (gap-fill)
+        let from_block_number = shared_state.lock().await.get_current_block_number();
+        tracing::info!("Backfill started at block number: {from_block_number:?}");
+
+        let (gapfill_tx, gapfill_rx) = mpsc::channel::<Result<Events<T>>>(1);
+
+        let (gapfill_shutdown_tx, _) = broadcast::channel::<()>(1);
+
+        let gapfill_consumer_handle = subscriber::spawn_event_consumer(
+            gapfill_rx,
+            gapfill_shutdown_tx.clone(),
+            Arc::new(checkpointer.clone()),
+            Arc::clone(&sink),
+        )
+        .await;
+
+        let gapfill_producer_handle = gapfiller::spawn_gapfill_producer(
+            args,
+            &block_tip,
+            gapfill_tx,
+            gapfill_shutdown_tx.clone(),
+            Arc::clone(&shared_state),
+            Arc::new(node_client.clone()),
+            Arc::clone(&source),
+        )
+        .await?;
+
+        // wait for gapfill to complete
+        async {
+            tokio::try_join!(gapfill_producer_handle, gapfill_consumer_handle)?;
+            Ok::<(), eyre::Report>(())
+        }
+        .await?;
+
+        let latest_block_number = shared_state.lock().await.get_current_block_number();
+        tracing::info!("Backfill finished at block number: {latest_block_number:?}");
+
+        // we flush a checkpoint at the end of backfilling
+        // if there was no roll forward
+        let do_flush_checkpoint = from_block_number < latest_block_number
+            && shared_state.lock().await.get_checkpoint_counter() == 0;
+        if do_flush_checkpoint {
+            let checkpoint_outcome =
+                shared_state.lock().await.flush_checkpoint(node_client).await?;
+            subscriber::consume_event_outcome(checkpoint_outcome, checkpointer, sink.as_ref())
+                .await?
+        }
+
+        // 2. Run collect elements live async (live-watcher)
         let (tx, rx) = mpsc::channel::<Result<Events<T>>>(channel_size(args));
 
         let (shutdown_tx, _) = broadcast::channel::<()>(1);
@@ -72,16 +121,11 @@ impl Engine {
         )
         .await;
 
-        // Wrap in a Arc + Mutex for interior mutability.
-        // * Arc, allows sharing across async tasks/closures.
-        // * Mutex, gives async mutable access:
-        let shared_state = Arc::new(Mutex::new(state));
-
         let producer_handle = publisher::spawn_event_producer(
             args,
-            shared_state,
             tx,
             shutdown_tx.clone(),
+            Arc::clone(&shared_state),
             Arc::new(node_client.clone()),
             Arc::clone(&source),
         )

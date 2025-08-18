@@ -13,7 +13,7 @@ use chain::rpc::NodeClient;
 use eyre::Result;
 use std::fmt::Debug;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct State {
     block_counter: u64,
     checkpoint_counter: u64,
@@ -103,7 +103,7 @@ impl State {
                 Ok(Events(vec![Event::Skip]))
             }
             Ok(t) => {
-                tracing::info!("Publisher rolling forward: {input:?}");
+                tracing::info!("Logic rolling forward: {input:?}");
                 if t.block_number() == self.current_block_number {
                     let outcome_event = Event::Element(Box::new(t));
                     Ok(Events(vec![outcome_event]))

@@ -14,9 +14,9 @@ use tokio::sync::{Mutex, broadcast, mpsc};
 
 pub async fn spawn_event_producer<E, T>(
     args: &Args,
-    shared_state: Arc<Mutex<State>>,
     tx: mpsc::Sender<Result<Events<T>>>,
     shutdown_tx: broadcast::Sender<()>,
+    shared_state: Arc<Mutex<State>>,
     node_client: Arc<NodeClient>,
     source: Arc<dyn Source<Item = E>>,
 ) -> Result<tokio::task::JoinHandle<()>>
@@ -48,7 +48,6 @@ where
         async move {
             match inputs_stream_for_producer.lock().await.next().await {
                 Some(input) => {
-                    tracing::info!("Publisher rolling forward: {input:?}");
                     state_for_producer
                         .lock()
                         .await
@@ -63,6 +62,7 @@ where
         }
     };
 
-    // Spawn producer: produces received from logs stream and sends them to tx (consumer)
+    // Spawn producer: produces received inputs from logs stream
+    // and sends them rolled forward events to tx (consumer)
     Ok(Producer::spawn(tx, shutdown_tx, producer_callback))
 }

@@ -9,7 +9,7 @@ pub trait SourceInput {
 }
 
 #[async_trait::async_trait]
-pub trait Source {
+pub trait Source: Send + Sync {
     type Item: SourceInput;
 
     async fn chunk(&self, filter: ChunkFilter) -> Result<Vec<Self::Item>>;

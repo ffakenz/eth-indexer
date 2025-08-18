@@ -3,7 +3,7 @@
 
 - **Indexer**
   Ingests filtered on-chain logs from RPC (source) and persists transfer events in SQLite (sink).
-  - **Gapfiller** → (sync) on startup, it backfills log events in batches from a given block number
+  - **Gapfiller** → (async) on startup, it backfills log events in batches from a given block number
   - **Live-Watcher** → (async) streams incoming logs for processing
   - **Block bloom filtering** → used by both Gapfiller (`eth_getLogs`) and Live-Watcher (`eth_getFilterChanges`) under the hood to efficiently skip blocks without relevant events.
   - **Checkpointer** → (periodically) persists checkpoint snapshots at a configurable interval
