@@ -97,17 +97,6 @@ impl Engine {
         let latest_block_number = shared_state.lock().await.get_current_block_number();
         tracing::info!("Backfill finished at block number: {latest_block_number:?}");
 
-        // we flush a checkpoint at the end of backfilling
-        // if there was no roll forward
-        let do_flush_checkpoint = from_block_number < latest_block_number
-            && shared_state.lock().await.get_checkpoint_counter() == 0;
-        if do_flush_checkpoint {
-            let checkpoint_outcome =
-                shared_state.lock().await.flush_checkpoint(node_client).await?;
-            subscriber::consume_event_outcome(checkpoint_outcome, checkpointer, sink.as_ref())
-                .await?
-        }
-
         // 2. Run collect elements live async (live-watcher)
         let (tx, rx) = mpsc::channel::<Result<Events<T>>>(channel_size(args));
 
