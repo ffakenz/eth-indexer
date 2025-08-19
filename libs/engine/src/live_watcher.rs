@@ -1,9 +1,9 @@
 use crate::args::Args;
-use crate::live::source::filter::StreamFilter;
-use crate::live::source::handle::{Source, SourceInput};
-use crate::live::state::event::Events;
-use crate::live::state::logic::State;
-use crate::live::state::outcome::Outcome;
+use crate::source::filter::StreamFilter;
+use crate::source::handle::{Source, SourceInput};
+use crate::state::event::Events;
+use crate::state::logic::State;
+use crate::state::outcome::Outcome;
 use chain::rpc::NodeClient;
 use eyre::{Result, eyre};
 use futures_util::StreamExt;
@@ -12,7 +12,7 @@ use std::sync::Arc;
 use sync::producer::Producer;
 use tokio::sync::{Mutex, broadcast, mpsc};
 
-pub async fn spawn_event_producer<E, T>(
+pub async fn spawn<E, T>(
     args: &Args,
     tx: mpsc::Sender<Result<Events<T>>>,
     shutdown_tx: broadcast::Sender<()>,

@@ -1,6 +1,6 @@
 use alloy::{primitives::Address, rpc::types::ValueOrArray};
 use clap::ValueEnum;
-use engine::live::source::filter::EventType;
+use engine::source::filter::EventType;
 
 #[derive(Debug, Clone, ValueEnum)]
 pub enum CliEventType {

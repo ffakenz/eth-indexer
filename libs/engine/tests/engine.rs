@@ -3,10 +3,10 @@ mod tests {
     use alloy::rpc::types::{Log, ValueOrArray};
     use engine::checkpointer::Checkpointer;
     use engine::engine::Engine;
-    use engine::live::sink::{handle::Sink, transfer::TransferSink};
-    use engine::live::source::filter::EventType;
-    use engine::live::source::handle::Source;
-    use engine::live::source::log::LogSource;
+    use engine::sink::{handle::Sink, transfer::TransferSink};
+    use engine::source::filter::EventType;
+    use engine::source::handle::Source;
+    use engine::source::log::LogSource;
     use eyre::Result;
     use store::checkpoint::store::Store as CheckpointStore;
     use store::client::Client;

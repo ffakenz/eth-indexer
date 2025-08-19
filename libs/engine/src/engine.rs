@@ -1,12 +1,12 @@
 use crate::args::Args;
 use crate::checkpointer::Checkpointer;
 use crate::gapfiller;
-use crate::live::pubsub::{publisher, subscriber};
-use crate::live::sink::handle::Sink;
-use crate::live::source::handle::{Source, SourceInput};
-use crate::live::state::event::Events;
-use crate::live::state::logic;
-use crate::live::state::outcome::Outcome;
+use crate::sink::handle::Sink;
+use crate::source::handle::{Source, SourceInput};
+use crate::state::event::Events;
+use crate::state::logic;
+use crate::state::outcome::Outcome;
+use crate::{consumer, live_watcher};
 use alloy::rpc::types::Block;
 use chain::rpc::NodeClient;
 use eyre::{Result, eyre};
@@ -68,7 +68,7 @@ impl Engine {
 
         let (gapfill_shutdown_tx, _) = broadcast::channel::<()>(1);
 
-        let gapfill_consumer_handle = subscriber::spawn_event_consumer(
+        let gapfill_consumer_handle = consumer::spawn(
             gapfill_rx,
             gapfill_shutdown_tx.clone(),
             Arc::new(checkpointer.clone()),
@@ -76,7 +76,7 @@ impl Engine {
         )
         .await;
 
-        let gapfill_producer_handle = gapfiller::spawn_gapfill_producer(
+        let gapfill_producer_handle = gapfiller::spawn(
             args,
             &block_tip,
             gapfill_tx,
@@ -102,7 +102,7 @@ impl Engine {
 
         let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
-        let consumer_handle = subscriber::spawn_event_consumer(
+        let consumer_handle = consumer::spawn(
             rx,
             shutdown_tx.clone(),
             Arc::new(checkpointer.clone()),
@@ -110,7 +110,7 @@ impl Engine {
         )
         .await;
 
-        let producer_handle = publisher::spawn_event_producer(
+        let producer_handle = live_watcher::spawn(
             args,
             tx,
             shutdown_tx.clone(),

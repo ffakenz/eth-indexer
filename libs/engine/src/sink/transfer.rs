@@ -1,7 +1,7 @@
 use eyre::{Result, eyre};
 use store::transfer::{model::Transfer, store::Store};
 
-use crate::live::sink::handle::Sink;
+use crate::sink::handle::Sink;
 
 pub struct TransferSink {
     pub store: Store,

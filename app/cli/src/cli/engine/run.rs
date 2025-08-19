@@ -4,10 +4,8 @@ use engine::{
     args::Args,
     checkpointer::Checkpointer,
     engine::Engine,
-    live::{
-        sink::{handle::Sink, transfer::TransferSink},
-        source::{handle::Source, log::LogSource},
-    },
+    sink::{handle::Sink, transfer::TransferSink},
+    source::{handle::Source, log::LogSource},
 };
 use eyre::Result;
 use std::{str::FromStr, sync::Arc};

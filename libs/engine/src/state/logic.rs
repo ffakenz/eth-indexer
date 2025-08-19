@@ -1,11 +1,9 @@
 use crate::{
     checkpointer::Checkpointer,
-    live::{
-        source::handle::SourceInput,
-        state::{
-            event::{self, Event, Events},
-            outcome::Outcome,
-        },
+    source::handle::SourceInput,
+    state::{
+        event::{self, Event, Events},
+        outcome::Outcome,
     },
 };
 use alloy::{primitives::BlockNumber, rpc::types::Block};

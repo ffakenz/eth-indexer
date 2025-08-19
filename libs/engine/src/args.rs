@@ -5,7 +5,7 @@ use alloy::{
     rpc::types::ValueOrArray,
 };
 
-use crate::live::source::filter::EventType;
+use crate::source::filter::EventType;
 
 #[derive(Debug)]
 pub struct Args {

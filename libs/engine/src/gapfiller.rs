@@ -1,9 +1,9 @@
 use crate::args::Args;
-use crate::live::source::filter::ChunkFilter;
-use crate::live::source::handle::{Source, SourceInput};
-use crate::live::state::event::Events;
-use crate::live::state::logic::State;
-use crate::live::state::outcome::Outcome;
+use crate::source::filter::ChunkFilter;
+use crate::source::handle::{Source, SourceInput};
+use crate::state::event::Events;
+use crate::state::logic::State;
+use crate::state::outcome::Outcome;
 use alloy::rpc::types::Block;
 use chain::rpc::NodeClient;
 use eyre::{Result, eyre};
@@ -12,7 +12,7 @@ use std::sync::Arc;
 use sync::producer::Producer;
 use tokio::sync::{Mutex, broadcast, mpsc};
 
-pub async fn spawn_gapfill_producer<E, T>(
+pub async fn spawn<E, T>(
     args: &Args,
     block_tip: &Block,
     tx: mpsc::Sender<Result<Events<T>>>,

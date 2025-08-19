@@ -1,9 +1,7 @@
 use crate::{
     checkpointer::Checkpointer,
-    live::{
-        sink::handle::Sink,
-        state::event::{Event, Events},
-    },
+    sink::handle::Sink,
+    state::event::{Event, Events},
 };
 use eyre::Result;
 use std::fmt::Debug;
@@ -11,7 +9,7 @@ use std::sync::Arc;
 use sync::consumer::Consumer;
 use tokio::sync::{broadcast, mpsc};
 
-pub async fn consume_event_outcome<T: Debug>(
+async fn consume_event_outcome<T: Debug>(
     event: Event<T>,
     checkpointer: &Checkpointer,
     sink: &dyn Sink<Item = T>,
@@ -45,7 +43,7 @@ pub async fn consume_event_outcome<T: Debug>(
     }
 }
 
-pub async fn spawn_event_consumer<T>(
+pub async fn spawn<T>(
     rx: mpsc::Receiver<Result<Events<T>>>,
     shutdown_tx: broadcast::Sender<()>,
     checkpointer: Arc<Checkpointer>,
